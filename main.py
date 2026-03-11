@@ -79,7 +79,7 @@ h1, h2, h3, h4, h5, h6, p, li, label, div, span {
 .section-title {
     font-size: 1.2rem;
     font-weight: 600;
-    margin-bottom: 0.65rem;
+    margin-bottom: 0.25rem;
     color: white !important;
 }
 
@@ -258,10 +258,54 @@ def is_valid_country(location_value: str) -> bool:
         "Account",
         "Locations",
     }
-    if value in invalid_values:
-        return False
+    return value not in invalid_values
 
-    return True
+
+def map_geo_region(country: str) -> str:
+    if pd.isna(country):
+        return "Rest of World"
+
+    country = str(country).strip()
+
+    mapping = {
+        "United Kingdom": "UK",
+        "United States": "North America",
+        "Canada": "North America",
+        "Germany": "DACH + BeNeLux",
+        "Austria": "DACH + BeNeLux",
+        "Switzerland": "DACH + BeNeLux",
+        "Belgium": "DACH + BeNeLux",
+        "Netherlands": "DACH + BeNeLux",
+        "Luxembourg": "DACH + BeNeLux",
+        "Denmark": "Nordics",
+        "Sweden": "Nordics",
+        "Norway": "Nordics",
+        "Finland": "Nordics",
+        "Iceland": "Nordics",
+        "Australia": "ANZ",
+        "New Zealand": "ANZ",
+        "France": "Rest of Europe",
+        "Italy": "Rest of Europe",
+        "Spain": "Rest of Europe",
+        "Portugal": "Rest of Europe",
+        "Ireland": "Rest of Europe",
+        "Czechia": "Rest of Europe",
+        "Czech Republic": "Rest of Europe",
+        "Slovakia": "Rest of Europe",
+        "Hungary": "Rest of Europe",
+        "Poland": "Rest of Europe",
+        "Romania": "Rest of Europe",
+        "Bulgaria": "Rest of Europe",
+        "Croatia": "Rest of Europe",
+        "Slovenia": "Rest of Europe",
+        "Greece": "Rest of Europe",
+        "Estonia": "Rest of Europe",
+        "Latvia": "Rest of Europe",
+        "Lithuania": "Rest of Europe",
+        "Malta": "Rest of Europe",
+        "Cyprus": "Rest of Europe",
+    }
+    return mapping.get(country, "Rest of World")
 
 
 def build_campaign_rows(raw_df: pd.DataFrame) -> pd.DataFrame:
@@ -339,7 +383,7 @@ def currency_columns(df: pd.DataFrame):
 def style_dataframe(df: pd.DataFrame):
     pct_cols = percentage_columns(df)
     money_cols = currency_columns(df)
-    label_cols = {"Keyword", "Campaign", "Country"}
+    label_cols = {"Keyword", "Campaign", "Country", "Region"}
     int_cols = [c for c in df.columns if c not in pct_cols and c not in money_cols and c not in label_cols]
 
     format_map = {}
@@ -600,6 +644,7 @@ if data_loaded:
             geo_df[col] = clean_numeric(geo_df[col])
 
     geo_df = geo_df[geo_df["Location"].apply(is_valid_country)].copy()
+    geo_df["Region"] = geo_df["Location"].apply(map_geo_region)
 
     campaigns_df = build_campaign_rows(campaign_raw_df)
     if not campaigns_df.empty:
@@ -869,14 +914,14 @@ with tab2:
 
         st.markdown(f"""
         <div class="insight-box">
-            <div class="insight-title">Where We Are Not Optimized Enough</div>
+            <div class="insight-title">Areas for Optimization</div>
             <div class="insight-text">{bullets_to_html(paid_analysis["optimization"])}</div>
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown(f"""
         <div class="insight-box">
-            <div class="insight-title">Where We Are Missing Opportunities</div>
+            <div class="insight-title">Missed Opportunities</div>
             <div class="insight-text">{bullets_to_html(paid_analysis["opportunity"])}</div>
         </div>
         </div>
@@ -887,9 +932,6 @@ with tab2:
         st.markdown("""
         <div class="glass-card">
             <div class="section-title">Campaign Summary</div>
-            <p style="color: rgba(255,255,255,0.78) !important;">
-                Unified sortable campaign table focused on spend, traffic, leads, and downstream pipeline.
-            </p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -941,10 +983,7 @@ with tab2:
 
         st.markdown("""
         <div class="glass-card">
-            <div class="section-title">Enabled Keyword Performance</div>
-            <p style="color: rgba(255,255,255,0.78) !important;">
-                Unified sortable table with all enabled keywords in the selected date range.
-            </p>
+            <div class="section-title">Keyword Performance</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1001,16 +1040,13 @@ with tab2:
 
         st.markdown("""
         <div class="glass-card">
-            <div class="section-title">GEO Performance</div>
-            <p style="color: rgba(255,255,255,0.78) !important;">
-                Unified sortable country table only. Non-country rows are excluded automatically. Date and country filters both apply here.
-            </p>
+            <div class="section-title">Global Performance</div>
         </div>
         """, unsafe_allow_html=True)
 
         if not filtered_geo.empty:
             geo_table = (
-                filtered_geo.groupby("Location", as_index=False)[
+                filtered_geo.groupby(["Region", "Location"], as_index=False)[
                     ["Impr.", "Interactions", "Cost", "Conversions"]
                 ]
                 .sum()
@@ -1032,6 +1068,7 @@ with tab2:
             geo_table = geo_table.rename(columns={"Location": "Country"})
             geo_table = geo_table[
                 [
+                    "Region",
                     "Country",
                     "Impr.",
                     "Interactions",
