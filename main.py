@@ -1,110 +1,225 @@
 import streamlit as st
-import pandas as pd
-import os
 
-# --- 1. MANDATORY THEME CONFIG ---
-st.set_page_config(page_title="Quicklizard Marketing Dashboard", layout="wide")
+st.set_page_config(
+    page_title="Marketing Minisite",
+    page_icon="🚀",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
-# CSS to force Deep Black Background and High-Contrast White Text
-st.markdown("""
+st.markdown(
+    """
     <style>
-    .stApp { background-color: #000000 !important; color: #ffffff !important; }
-    section[data-testid="stSidebar"] { background-color: #050505 !important; border-right: 1px solid #222222; }
-    section[data-testid="stSidebar"] * { color: #ffffff !important; }
-    h1, h2, h3, h4, p, span, label, div, .stMarkdown { color: #ffffff !important; font-family: 'Helvetica Neue', sans-serif; }
-    
-    /* Campaign Square Styling */
-    .campaign-container {
-        border: 1px solid #ffffff;
-        padding: 20px;
-        border-radius: 5px;
-        margin-bottom: 25px;
-        background-color: #000000;
+    /* Import clean font */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    /* Global app styling */
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+        color: white;
     }
-    
-    /* Table Visibility */
-    .stDataFrame, div[data-testid="stTable"] { border: 1px solid #333333; background-color: #000000; }
+
+    .stApp {
+        background: linear-gradient(135deg, #031b3a 0%, #0a3d7a 45%, #1259b8 100%);
+        color: white;
+    }
+
+    /* Main container spacing */
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        padding-left: 3rem;
+        padding-right: 3rem;
+        max-width: 1400px;
+    }
+
+    /* Headings and text */
+    h1, h2, h3, h4, h5, h6, p, li, label, div, span {
+        color: white !important;
+    }
+
+    /* Muted text helper */
+    .muted {
+        color: rgba(255, 255, 255, 0.78) !important;
+    }
+
+    /* Cards / sections */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 20px;
+        padding: 1.5rem;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+    }
+
+    /* Buttons */
+    .stButton > button {
+        background: white;
+        color: #06264d;
+        border: none;
+        border-radius: 12px;
+        padding: 0.65rem 1.2rem;
+        font-weight: 700;
+    }
+
+    .stButton > button:hover {
+        background: #e8f0ff;
+        color: #031b3a;
+    }
+
+    /* Text input / text area / select styling */
+    .stTextInput input,
+    .stTextArea textarea,
+    .stSelectbox div[data-baseweb="select"] > div {
+        background-color: rgba(255, 255, 255, 0.10) !important;
+        color: white !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(255, 255, 255, 0.20) !important;
+    }
+
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        margin-bottom: 1rem;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 10px 18px;
+        color: white !important;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: rgba(255, 255, 255, 0.18) !important;
+        color: white !important;
+    }
+
+    /* Divider */
+    hr {
+        border: none;
+        border-top: 1px solid rgba(255,255,255,0.15);
+        margin-top: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    /* Hide Streamlit default header menu/footer */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     </style>
-    """, unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True,
+)
 
-# --- 2. THE PERMANENT HEADER ---
-col_logo, col_title = st.columns([1, 4])
-with col_logo:
-    st.image("https://quicklizard.com/wp-content/uploads/2021/03/Quicklizard-Logo-1.png", width=180)
-with col_title:
-    st.markdown("<h1 style='margin-top: 10px;'>Quicklizard Marketing Dashboard</h1>", unsafe_allow_html=True)
+# -----------------------------
+# HERO
+# -----------------------------
+st.markdown(
+    """
+    <div class="glass-card">
+        <h1 style="font-size: 3rem; margin-bottom: 0.5rem;">
+            Your Marketing Headline Goes Here
+        </h1>
+        <p class="muted" style="font-size: 1.15rem; max-width: 850px;">
+            This is the opening shell of your Streamlit minisite. The core design system is now set:
+            dark blue gradient background, white text, and glass-style content containers.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-# --- 3. TAB SELECTION & SUBHEADER ---
-# We are building this one-by-one, starting with Google Paid Search
-st.markdown("### Google Paid Search")
-st.markdown("---")
+st.write("")
 
-# --- 4. DATA ENGINE ---
-@st.cache_data
-def load_and_clean(file, skip=0):
-    if not os.path.exists(file): return pd.DataFrame()
-    df = pd.read_csv(file, skiprows=skip)
-    
-    # Standard cleaning for numeric conversion
-    for col in df.columns:
-        if df[col].dtype == 'object':
-            df[col] = df[col].astype(str).str.replace(r'[%\$,]', '', regex=True).replace(['--', ' --'], '0')
-            if any(char.isdigit() for char in str(df[col].iloc[0])):
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-    
-    # HARD FILTER: Only show active data (Spend > 0 AND Impressions > 0)
-    if 'Cost' in df.columns and 'Impr.' in df.columns:
-        df = df[(df['Cost'] > 0) & (df['Impr.'] > 0)]
-    return df
+col1, col2, col3 = st.columns([1, 1, 2])
 
-# Loading the two new CSVs you provided
-df_keywords = load_and_clean("New Search Report Google Paid.csv", skip=2)
-df_locations = load_and_clean("New Location Report Google Paid.csv", skip=2)
+with col1:
+    if st.button("Book a Demo"):
+        st.toast("CTA placeholder clicked")
 
-# --- 5. THE NARRATIVE ---
-st.markdown("""
-### Strategic Overview: Investing in Intent
-Google Paid Search is our 'active acquisition engine.' Unlike other channels, this is where we pay to be at the top of the conversation when a potential client is searching for a solution to their pricing challenges. 
+with col2:
+    if st.button("Learn More"):
+        st.toast("Secondary CTA placeholder clicked")
 
-**The Active Portfolio Policy:** For this presentation, we have filtered out the 'noise.' The tables below only show keywords and locations where we actively deployed capital and where the market actually saw our ads. If a keyword has zero impressions or zero spend, it is excluded to ensure the Board stays focused on our active growth engines.
-""")
+with col3:
+    st.markdown(
+        """
+        <p class="muted" style="margin-top: 0.6rem;">
+            We can now build each tab one by one with your content, messaging, and conversion flow.
+        </p>
+        """,
+        unsafe_allow_html=True,
+    )
 
-# --- 6. CAMPAIGN SQUARES (NA, EMEA, TL) ---
-st.markdown("---")
-st.markdown("### Active Campaign Performance")
+st.markdown("<hr>", unsafe_allow_html=True)
 
-# Mapping your spreadsheet campaigns into the 3 requested squares
-if not df_keywords.empty:
-    col_na, col_emea, col_tl = st.columns(3)
-    
-    with col_na:
-        st.markdown("#### North America (NA)")
-        na_data = df_keywords[df_keywords['Campaign'].str.contains('NA|USA', case=False, na=False)]
-        if not na_data.empty:
-            na_cols = st.multiselect("Filter NA Columns", na_data.columns.tolist(), default=['Month', 'Keyword', 'Interactions', 'Cost'], key="na")
-            st.dataframe(na_data[na_cols], use_container_width=True)
-        else: st.write("No active NA data found.")
+# -----------------------------
+# TABS
+# -----------------------------
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["Overview", "Solution", "Proof", "Contact"]
+)
 
-    with col_emea:
-        st.markdown("#### Europe (EMEA)")
-        emea_data = df_keywords[df_keywords['Campaign'].str.contains('Germany|EMEA|Moranne', case=False, na=False)]
-        if not emea_data.empty:
-            emea_cols = st.multiselect("Filter EMEA Columns", emea_data.columns.tolist(), default=['Month', 'Keyword', 'Interactions', 'Cost'], key="emea")
-            st.dataframe(emea_data[emea_cols], use_container_width=True)
-        else: st.write("No active EMEA data found.")
+with tab1:
+    st.markdown(
+        """
+        <div class="glass-card">
+            <h2>Overview</h2>
+            <p class="muted">
+                This tab is ready for your top-level value proposition, summary copy, and intro messaging.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    with col_tl:
-        st.markdown("#### Thought Leadership (TL)")
-        tl_data = df_keywords[df_keywords['Campaign'].str.contains('TL|Thought', case=False, na=False)]
-        if not tl_data.empty:
-            tl_cols = st.multiselect("Filter TL Columns", tl_data.columns.tolist(), default=['Month', 'Keyword', 'Interactions', 'Cost'], key="tl")
-            st.dataframe(tl_data[tl_cols], use_container_width=True)
-        else: st.write("No active TL data found.")
+with tab2:
+    st.markdown(
+        """
+        <div class="glass-card">
+            <h2>Solution</h2>
+            <p class="muted">
+                This tab can hold product details, workflows, differentiators, and use cases.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-# --- 7. GEOGRAPHIC PERFORMANCE ---
-st.markdown("---")
-st.markdown("### Strategic Geographic Deployment")
-if not df_locations.empty:
-    # Remove rows where Location is empty or a total summary
-    clean_geo = df_locations[df_locations['Location'].notna()]
-    st.dataframe(clean_geo[['Month', 'Location', 'Campaign', 'Impr.', 'Interactions', 'Cost']], use_container_width=True)
+with tab3:
+    st.markdown(
+        """
+        <div class="glass-card">
+            <h2>Proof</h2>
+            <p class="muted">
+                This tab can hold logos, testimonials, case studies, KPIs, or performance claims.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with tab4:
+    st.markdown(
+        """
+        <div class="glass-card">
+            <h2>Contact</h2>
+            <p class="muted">
+                This tab can become a lead form, demo request area, or booking section.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.form("contact_form"):
+        name = st.text_input("Name")
+        email = st.text_input("Email")
+        message = st.text_area("Message")
+        submitted = st.form_submit_button("Submit")
+
+        if submitted:
+            st.success("Form submitted placeholder.")
