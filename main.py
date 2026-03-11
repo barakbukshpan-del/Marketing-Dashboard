@@ -1,3 +1,7 @@
+import os
+from pathlib import Path
+
+import pandas as pd
 import streamlit as st
 
 st.set_page_config(
@@ -84,6 +88,11 @@ st.markdown(
         color: white !important;
     }
 
+    .small-note {
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.68) !important;
+    }
+
     .stTabs [data-baseweb="tab-list"] {
         gap: 10px;
         margin-bottom: 1rem;
@@ -101,6 +110,14 @@ st.markdown(
         color: white !important;
     }
 
+    div[data-baseweb="select"] * {
+        color: #0b1f3a !important;
+    }
+
+    .stMultiSelect div[data-baseweb="tag"] {
+        background-color: rgba(255,255,255,0.18) !important;
+    }
+
     hr {
         border: none;
         border-top: 1px solid rgba(255,255,255,0.15);
@@ -116,6 +133,153 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+# -----------------------------
+# HELPERS
+# -----------------------------
+def find_file(possible_paths):
+    for path in possible_paths:
+        if Path(path).exists():
+            return path
+    return None
+
+
+@st.cache_data
+def load_google_paid_data():
+    keywords_path = find_file(
+        [
+            "data/google_paid_keywords.csv",
+            "data/Google Paid Keywords.csv",
+            "/mnt/data/Google Paid Keywords.csv",
+        ]
+    )
+    locations_path = find_file(
+        [
+            "data/google_paid_locations.csv",
+            "data/Google Paid Locations.csv",
+            "/mnt/data/Google Paid Locations.csv",
+        ]
+    )
+
+    if not keywords_path:
+        raise FileNotFoundError("Google Paid Keywords file not found.")
+    if not locations_path:
+        raise FileNotFoundError("Google Paid Locations file not found.")
+
+    keywords_df = pd.read_csv(keywords_path)
+    locations_df = pd.read_csv(locations_path)
+
+    return keywords_df, locations_df
+
+
+def parse_month_column(series):
+    return pd.to_datetime(series, format="%b-%y", errors="coerce")
+
+
+def clean_numeric(series):
+    return (
+        series.astype(str)
+        .str.replace(",", "", regex=False)
+        .str.replace("%", "", regex=False)
+        .str.replace("$", "", regex=False)
+        .str.replace("--", "", regex=False)
+        .str.strip()
+        .replace("", pd.NA)
+        .astype(float)
+    )
+
+
+def format_number(value, decimals=0):
+    if pd.isna(value):
+        return "--"
+    return f"{value:,.{decimals}f}"
+
+
+def safe_divide(numerator, denominator):
+    if denominator == 0 or pd.isna(denominator):
+        return 0
+    return numerator / denominator
+
+
+# -----------------------------
+# LOAD DATA
+# -----------------------------
+keywords_df = None
+locations_df = None
+paid_data_loaded = False
+
+try:
+    keywords_df, locations_df = load_google_paid_data()
+    paid_data_loaded = True
+except Exception:
+    paid_data_loaded = False
+
+
+if paid_data_loaded:
+    # Keywords cleaning
+    keywords_df["Month_dt"] = parse_month_column(keywords_df["Month"])
+    keywords_df["Keyword status"] = keywords_df["Keyword status"].astype(str).str.strip()
+    keywords_df["Keyword"] = keywords_df["Keyword"].astype(str).str.strip().str.replace('"', "", regex=False)
+
+    keyword_numeric_cols = [
+        "Interactions",
+        "Avg. cost",
+        "Cost",
+        "Impressions",
+        "Clicks",
+        "Conversions",
+        "Avg. CPC",
+        "Cost / conv.",
+        "Max. CPC",
+    ]
+    for col in keyword_numeric_cols:
+        if col in keywords_df.columns:
+            keywords_df[col] = clean_numeric(keywords_df[col])
+
+    if "Interaction rate" in keywords_df.columns:
+        keywords_df["Interaction rate"] = clean_numeric(keywords_df["Interaction rate"])
+    if "Conv. rate" in keywords_df.columns:
+        keywords_df["Conv. rate"] = clean_numeric(keywords_df["Conv. rate"])
+
+    enabled_keywords_df = keywords_df[
+        keywords_df["Keyword status"].str.lower() == "enabled"
+    ].copy()
+
+    # Locations cleaning
+    locations_df["Month_dt"] = parse_month_column(locations_df["Month"])
+    locations_df["Location"] = locations_df["Location"].astype(str).str.strip()
+    locations_df["Campaign"] = locations_df["Campaign"].astype(str).str.strip()
+
+    location_numeric_cols = [
+        "Impr.",
+        "Interactions",
+        "Avg. cost",
+        "Cost",
+        "Conversions",
+        "Cost / conv.",
+    ]
+    for col in location_numeric_cols:
+        if col in locations_df.columns:
+            locations_df[col] = clean_numeric(locations_df[col])
+
+    if "Interaction rate" in locations_df.columns:
+        locations_df["Interaction rate"] = clean_numeric(locations_df["Interaction rate"])
+    if "Conv. rate" in locations_df.columns:
+        locations_df["Conv. rate"] = clean_numeric(locations_df["Conv. rate"])
+
+    all_months = sorted(
+        pd.concat(
+            [
+                enabled_keywords_df["Month_dt"].dropna(),
+                locations_df["Month_dt"].dropna(),
+            ]
+        ).unique()
+    )
+else:
+    enabled_keywords_df = pd.DataFrame()
+    all_months = []
+
+
 # -----------------------------
 # HERO
 # -----------------------------
@@ -126,8 +290,8 @@ st.markdown(
             🦎 Quicklizard Marketing Dashboard
         </h1>
         <p class="muted" style="font-size: 1.15rem; max-width: 850px;">
-            This is an overview for the past 6 months for our main marketing Channels:
-            Google SEO, Google Organic, Linkedin Campaigns
+            Q4-Q1 2026 Marketing Overview for our 3 main channels:
+            Google Paid Keywords, Google Organic and Linkedin Campaigns
         </p>
     </div>
     """,
@@ -140,7 +304,7 @@ st.markdown("<hr>", unsafe_allow_html=True)
 # TABS
 # -----------------------------
 tab1, tab2, tab3, tab4 = st.tabs(
-    ["Overview", "Google SEO", "Google Organic", "LinkedIn Campaigns"]
+    ["Overview", "Google Paid Keywords", "Google Organic", "LinkedIn Campaigns"]
 )
 
 # -----------------------------
@@ -197,70 +361,357 @@ with tab1:
             unsafe_allow_html=True,
         )
 
-    st.markdown(
-        """
-        <div class="glass-card">
-            <div class="section-title">Overview Notes</div>
-            <p class="muted">
-                We can use this area for a short written summary of what happened across SEO, Organic, and LinkedIn Campaigns.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
 # -----------------------------
-# GOOGLE SEO TAB
+# GOOGLE PAID KEYWORDS TAB
 # -----------------------------
 with tab2:
     st.markdown(
         """
         <div class="glass-card">
-            <div class="section-title">Google SEO</div>
+            <div class="section-title">Google Paid Keywords</div>
             <p class="muted">
-                This tab will focus on search performance, rankings, impressions, clicks, and organic search visibility.
+                This section combines paid keyword and GEO performance across impressions, clicks, cost, and conversions.
             </p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
+    if not paid_data_loaded:
+        st.error(
+            "Google Paid data files were not found. Add both files to your repo under the data folder."
+        )
+        st.code(
+            "data/google_paid_keywords.csv\ndata/google_paid_locations.csv",
+            language="text",
+        )
+    else:
+        # -----------------------------
+        # FILTERS
+        # -----------------------------
         st.markdown(
             """
-            <div class="metric-card">
-                <div class="metric-label">SEO Clicks</div>
-                <div class="metric-value">--</div>
-                <div class="metric-delta">Placeholder metric</div>
+            <div class="glass-card">
+                <div class="section-title">Filters</div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        filter_col1, filter_col2 = st.columns([1.2, 1.2])
+
+        with filter_col1:
+            if len(all_months) > 0:
+                month_labels = [pd.Timestamp(m).strftime("%b %Y") for m in all_months]
+                default_range = (0, len(month_labels) - 1)
+
+                selected_range = st.select_slider(
+                    "Date Range",
+                    options=list(range(len(month_labels))),
+                    value=default_range,
+                    format_func=lambda x: month_labels[x],
+                )
+
+                selected_start = pd.Timestamp(all_months[selected_range[0]])
+                selected_end = pd.Timestamp(all_months[selected_range[1]])
+            else:
+                selected_start = None
+                selected_end = None
+                st.info("No valid dates found in the uploaded data.")
+
+        with filter_col2:
+            all_locations = sorted(locations_df["Location"].dropna().unique().tolist())
+            selected_countries = st.multiselect(
+                "Countries / GEOs",
+                options=all_locations,
+                default=all_locations,
+            )
+
+        st.markdown(
+            """
+            <p class="small-note">
+                Date filters apply to both keyword and GEO data. Country filters apply only to GEO/location sections because the keyword file does not include a country field.
+            </p>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    with col2:
+        # Apply date filter
+        filtered_keywords = enabled_keywords_df.copy()
+        filtered_locations = locations_df.copy()
+
+        if selected_start is not None and selected_end is not None:
+            filtered_keywords = filtered_keywords[
+                (filtered_keywords["Month_dt"] >= selected_start)
+                & (filtered_keywords["Month_dt"] <= selected_end)
+            ].copy()
+
+            filtered_locations = filtered_locations[
+                (filtered_locations["Month_dt"] >= selected_start)
+                & (filtered_locations["Month_dt"] <= selected_end)
+            ].copy()
+
+        # Apply country filter only to GEO data
+        if selected_countries:
+            filtered_locations = filtered_locations[
+                filtered_locations["Location"].isin(selected_countries)
+            ].copy()
+        else:
+            filtered_locations = filtered_locations.iloc[0:0].copy()
+
+        # -----------------------------
+        # KPI ROW
+        # -----------------------------
+        total_keyword_clicks = filtered_keywords["Clicks"].sum()
+        total_keyword_impressions = filtered_keywords["Impressions"].sum()
+        total_keyword_cost = filtered_keywords["Cost"].sum()
+        total_keyword_conversions = filtered_keywords["Conversions"].sum()
+
+        keyword_ctr = safe_divide(total_keyword_clicks, total_keyword_impressions) * 100
+        keyword_cpa = safe_divide(total_keyword_cost, total_keyword_conversions)
+
+        geo_interactions = filtered_locations["Interactions"].sum()
+        geo_impressions = filtered_locations["Impr."].sum()
+        geo_cost = filtered_locations["Cost"].sum()
+        geo_conversions = filtered_locations["Conversions"].sum()
+
+        geo_interaction_rate = safe_divide(geo_interactions, geo_impressions) * 100
+        geo_cpa = safe_divide(geo_cost, geo_conversions)
+
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+
+        with kpi1:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-label">Keyword Clicks</div>
+                    <div class="metric-value">{format_number(total_keyword_clicks)}</div>
+                    <div class="metric-delta">Enabled keywords only</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with kpi2:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-label">Keyword Conversions</div>
+                    <div class="metric-value">{format_number(total_keyword_conversions)}</div>
+                    <div class="metric-delta">Across selected date range</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with kpi3:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-label">Keyword Spend</div>
+                    <div class="metric-value">${format_number(total_keyword_cost, 2)}</div>
+                    <div class="metric-delta">Keyword CTR: {format_number(keyword_ctr, 2)}%</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with kpi4:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-label">GEO Spend</div>
+                    <div class="metric-value">${format_number(geo_cost, 2)}</div>
+                    <div class="metric-delta">GEO CPA: ${format_number(geo_cpa, 2)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+        # -----------------------------
+        # TOP SECTION: KEYWORDS
+        # -----------------------------
         st.markdown(
             """
-            <div class="metric-card">
-                <div class="metric-label">SEO Impressions</div>
-                <div class="metric-value">--</div>
-                <div class="metric-delta">Placeholder metric</div>
+            <div class="glass-card">
+                <div class="section-title">Top Performing Keywords</div>
+                <p class="muted">
+                    Top section is dedicated to keyword performance. Paused keywords are excluded automatically.
+                </p>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    with col3:
+        kw_chart_col1, kw_chart_col2 = st.columns(2)
+
+        with kw_chart_col1:
+            monthly_keywords = (
+                filtered_keywords.groupby("Month_dt", as_index=False)[
+                    ["Clicks", "Conversions", "Cost", "Impressions"]
+                ]
+                .sum()
+                .sort_values("Month_dt")
+            )
+
+            if not monthly_keywords.empty:
+                keyword_trend = monthly_keywords.set_index("Month_dt")[
+                    ["Clicks", "Conversions", "Cost"]
+                ]
+                st.markdown("#### Keyword Trend")
+                st.line_chart(keyword_trend)
+            else:
+                st.info("No keyword trend data available for the selected date range.")
+
+        with kw_chart_col2:
+            top_keywords = (
+                filtered_keywords.groupby("Keyword", as_index=False)[
+                    ["Clicks", "Impressions", "Cost", "Conversions"]
+                ]
+                .sum()
+            )
+            top_keywords["CTR %"] = (
+                top_keywords.apply(
+                    lambda row: safe_divide(row["Clicks"], row["Impressions"]) * 100, axis=1
+                )
+            )
+            top_keywords["Cost / Conv."] = (
+                top_keywords.apply(
+                    lambda row: safe_divide(row["Cost"], row["Conversions"]), axis=1
+                )
+            )
+
+            top_keywords_by_conv = top_keywords.sort_values(
+                ["Conversions", "Clicks"], ascending=[False, False]
+            ).head(10)
+
+            st.markdown("#### Top Keywords by Conversions")
+            st.dataframe(
+                top_keywords_by_conv[
+                    ["Keyword", "Conversions", "Clicks", "Impressions", "CTR %", "Cost", "Cost / Conv."]
+                ].style.format(
+                    {
+                        "Conversions": "{:,.0f}",
+                        "Clicks": "{:,.0f}",
+                        "Impressions": "{:,.0f}",
+                        "CTR %": "{:,.2f}%",
+                        "Cost": "${:,.2f}",
+                        "Cost / Conv.": "${:,.2f}",
+                    }
+                ),
+                use_container_width=True,
+            )
+
+        st.markdown("#### Top Keywords by Spend")
+        top_keywords_by_spend = top_keywords.sort_values("Cost", ascending=False).head(10)
+        st.dataframe(
+            top_keywords_by_spend[
+                ["Keyword", "Cost", "Conversions", "Clicks", "CTR %", "Cost / Conv."]
+            ].style.format(
+                {
+                    "Cost": "${:,.2f}",
+                    "Conversions": "{:,.0f}",
+                    "Clicks": "{:,.0f}",
+                    "CTR %": "{:,.2f}%",
+                    "Cost / Conv.": "${:,.2f}",
+                }
+            ),
+            use_container_width=True,
+        )
+
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+        # -----------------------------
+        # BOTTOM SECTION: GEOS
+        # -----------------------------
         st.markdown(
             """
-            <div class="metric-card">
-                <div class="metric-label">Average Position</div>
-                <div class="metric-value">--</div>
-                <div class="metric-delta">Placeholder metric</div>
+            <div class="glass-card">
+                <div class="section-title">GEO Performance</div>
+                <p class="muted">
+                    Bottom section is dedicated to country-level performance, with country filtering enabled.
+                </p>
             </div>
             """,
             unsafe_allow_html=True,
+        )
+
+        geo_col1, geo_col2 = st.columns(2)
+
+        with geo_col1:
+            monthly_geo = (
+                filtered_locations.groupby("Month_dt", as_index=False)[
+                    ["Interactions", "Conversions", "Cost", "Impr."]
+                ]
+                .sum()
+                .sort_values("Month_dt")
+            )
+
+            if not monthly_geo.empty:
+                geo_trend = monthly_geo.set_index("Month_dt")[
+                    ["Interactions", "Conversions", "Cost"]
+                ]
+                st.markdown("#### GEO Trend")
+                st.line_chart(geo_trend)
+            else:
+                st.info("No GEO trend data available for the selected filters.")
+
+        with geo_col2:
+            top_countries = (
+                filtered_locations.groupby("Location", as_index=False)[
+                    ["Impr.", "Interactions", "Cost", "Conversions"]
+                ]
+                .sum()
+            )
+            top_countries["Interaction Rate %"] = (
+                top_countries.apply(
+                    lambda row: safe_divide(row["Interactions"], row["Impr."]) * 100, axis=1
+                )
+            )
+            top_countries["Cost / Conv."] = (
+                top_countries.apply(
+                    lambda row: safe_divide(row["Cost"], row["Conversions"]), axis=1
+                )
+            )
+
+            top_countries_by_conv = top_countries.sort_values(
+                ["Conversions", "Interactions"], ascending=[False, False]
+            ).head(10)
+
+            st.markdown("#### Top Countries by Conversions")
+            st.dataframe(
+                top_countries_by_conv[
+                    ["Location", "Conversions", "Interactions", "Impr.", "Interaction Rate %", "Cost", "Cost / Conv."]
+                ].style.format(
+                    {
+                        "Conversions": "{:,.0f}",
+                        "Interactions": "{:,.0f}",
+                        "Impr.": "{:,.0f}",
+                        "Interaction Rate %": "{:,.2f}%",
+                        "Cost": "${:,.2f}",
+                        "Cost / Conv.": "${:,.2f}",
+                    }
+                ),
+                use_container_width=True,
+            )
+
+        st.markdown("#### Top Countries by Spend")
+        top_countries_by_spend = top_countries.sort_values("Cost", ascending=False).head(10)
+        st.dataframe(
+            top_countries_by_spend[
+                ["Location", "Cost", "Conversions", "Interactions", "Interaction Rate %", "Cost / Conv."]
+            ].style.format(
+                {
+                    "Cost": "${:,.2f}",
+                    "Conversions": "{:,.0f}",
+                    "Interactions": "{:,.0f}",
+                    "Interaction Rate %": "{:,.2f}%",
+                    "Cost / Conv.": "${:,.2f}",
+                }
+            ),
+            use_container_width=True,
         )
 
 # -----------------------------
