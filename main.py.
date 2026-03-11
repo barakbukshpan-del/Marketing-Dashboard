@@ -115,3 +115,4 @@ Our geographic data tracks where our investment is most 'sticky.' We are looking
 if not df_geo.empty:
     geo_cols = ['Month', 'Location', 'Campaign', 'Impr.', 'Interactions', 'Cost']
     st.dataframe(df_geo[geo_cols], use_container_width=True)
+
