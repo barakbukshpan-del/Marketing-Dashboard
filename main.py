@@ -43,7 +43,7 @@ h1, h2, h3, h4, h5, h6, p, li, label, div, span {
     background: rgba(255,255,255,0.08);
     border: 1px solid rgba(255,255,255,0.14);
     border-radius: 20px;
-    padding: 1.4rem;
+    padding: 1.35rem;
     margin-bottom: 1rem;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
@@ -53,14 +53,14 @@ h1, h2, h3, h4, h5, h6, p, li, label, div, span {
     background: rgba(255,255,255,0.07);
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 18px;
-    padding: 1.1rem;
-    min-height: 125px;
+    padding: 1.05rem;
+    min-height: 122px;
 }
 
 .metric-label {
     font-size: 0.9rem;
     color: rgba(255,255,255,0.72) !important;
-    margin-bottom: 0.45rem;
+    margin-bottom: 0.4rem;
 }
 
 .metric-value {
@@ -99,14 +99,41 @@ h1, h2, h3, h4, h5, h6, p, li, label, div, span {
 .insight-title {
     font-size: 1rem;
     font-weight: 700;
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.45rem;
     color: white !important;
 }
 
-.insight-text {
-    font-size: 0.95rem;
+.insight-text, .insight-text li {
+    font-size: 0.96rem;
     line-height: 1.55;
-    color: rgba(255,255,255,0.86) !important;
+    color: rgba(255,255,255,0.87) !important;
+}
+
+.green-chip {
+    display: inline-block;
+    background: linear-gradient(135deg, #0b7a42 0%, #11a15a 100%);
+    color: white !important;
+    border-radius: 999px;
+    padding: 0.45rem 0.85rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-top: 0.25rem;
+}
+
+.filter-summary {
+    background: linear-gradient(135deg, rgba(11,122,66,0.92) 0%, rgba(17,161,90,0.92) 100%);
+    color: white !important;
+    border-radius: 14px;
+    padding: 0.85rem 1rem;
+    border: 1px solid rgba(255,255,255,0.12);
+    font-weight: 600;
+    margin-top: 0.25rem;
+}
+
+[data-testid="stDataFrame"] {
+    background: rgba(255,255,255,0.04);
+    border-radius: 14px;
+    padding: 0.25rem;
 }
 
 .stTabs [data-baseweb="tab-list"] {
@@ -133,21 +160,24 @@ div[data-baseweb="select"] > div {
 }
 
 .stMultiSelect div[data-baseweb="tag"] {
-    background-color: rgba(255,255,255,0.18) !important;
+    background: linear-gradient(135deg, #0b7a42 0%, #11a15a 100%) !important;
+    color: white !important;
     border-radius: 10px !important;
 }
 
-[data-testid="stDataFrame"] {
-    background: rgba(255,255,255,0.04);
-    border-radius: 14px;
-    padding: 0.25rem;
+div[role="radiogroup"] label {
+    background: rgba(255,255,255,0.08);
+    border-radius: 999px;
+    padding: 0.25rem 0.7rem !important;
+    margin-right: 0.35rem;
+    border: 1px solid rgba(255,255,255,0.12);
 }
 
 hr {
     border: none;
     border-top: 1px solid rgba(255,255,255,0.15);
-    margin-top: 1.6rem;
-    margin-bottom: 1.6rem;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
 }
 
 #MainMenu {visibility:hidden;}
@@ -260,13 +290,7 @@ def build_campaign_rows(raw_df: pd.DataFrame) -> pd.DataFrame:
                 last_month_num = month_num
                 current_month_name = calendar.month_abbr[month_num]
 
-        if c1 == "Campaign":
-            continue
-
-        if c1 == "" or c1.lower() == "nan":
-            continue
-
-        if c1 == "Total":
+        if c1 in ["Campaign", "Total", "", "nan"]:
             continue
 
         if current_month_name is None:
@@ -294,133 +318,6 @@ def build_campaign_rows(raw_df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def build_paid_analysis(campaign_df: pd.DataFrame, keyword_df: pd.DataFrame) -> dict:
-    if campaign_df.empty and keyword_df.empty:
-        return {
-            "summary": "No paid search data is available for the selected filters.",
-            "efficiency": "There is not enough data to identify efficiency gaps.",
-            "opportunity": "There is not enough data to identify growth opportunities.",
-        }
-
-    summary_parts = []
-    efficiency_parts = []
-    opportunity_parts = []
-
-    if not campaign_df.empty:
-        total_spend = campaign_df["Cost"].sum()
-        total_clicks = campaign_df["Clicks"].sum()
-        total_hs_leads = campaign_df["HS leads"].sum()
-        total_sal = campaign_df["SAL"].sum()
-        total_open_deals = campaign_df["Open deal"].sum()
-        overall_ctr = safe_div(total_clicks, campaign_df["Impr."].sum()) * 100
-        cpl = safe_div(total_spend, total_hs_leads)
-
-        campaign_rank = campaign_df.groupby("Campaign", as_index=False)[
-            ["Cost", "Clicks", "Impr.", "HS leads", "SAL", "Open deal"]
-        ].sum()
-        campaign_rank["CTR %"] = campaign_rank.apply(
-            lambda r: safe_div(r["Clicks"], r["Impr."]) * 100, axis=1
-        )
-        campaign_rank["CPL"] = campaign_rank.apply(
-            lambda r: safe_div(r["Cost"], r["HS leads"]), axis=1
-        )
-        campaign_rank["Cost per SAL"] = campaign_rank.apply(
-            lambda r: safe_div(r["Cost"], r["SAL"]), axis=1
-        )
-
-        top_lead_campaign = campaign_rank.sort_values(
-            ["HS leads", "SAL", "Open deal"], ascending=[False, False, False]
-        ).head(1)
-
-        if not top_lead_campaign.empty:
-            top_campaign_name = top_lead_campaign.iloc[0]["Campaign"]
-            top_campaign_leads = top_lead_campaign.iloc[0]["HS leads"]
-            summary_parts.append(
-                f"Across the selected view, Google Paid generated {fmt_money(total_spend)} in spend, "
-                f"{fmt_number(total_clicks)} clicks, {fmt_number(total_hs_leads)} HS leads, "
-                f"{fmt_number(total_sal)} SALs, and {fmt_number(total_open_deals)} open deals. "
-                f"Overall CTR is {fmt_pct(overall_ctr)} and blended CPL is {fmt_money(cpl)}. "
-                f"The strongest campaign by lead generation is {top_campaign_name} with {fmt_number(top_campaign_leads)} HS leads."
-            )
-
-        inefficient_campaigns = campaign_rank[
-            (campaign_rank["Cost"] > campaign_rank["Cost"].median()) &
-            (campaign_rank["HS leads"] <= campaign_rank["HS leads"].median())
-        ].sort_values("Cost", ascending=False)
-
-        if not inefficient_campaigns.empty:
-            weak_names = inefficient_campaigns["Campaign"].head(3).tolist()
-            efficiency_parts.append(
-                f"The clearest efficiency gap is in higher-spend campaigns that are not producing enough downstream outcomes. "
-                f"The main watchlist campaigns are {', '.join(weak_names)}. These likely need tighter audience intent, ad group pruning, "
-                f"and stronger landing page relevance."
-            )
-
-        pipeline_gap_campaigns = campaign_rank[
-            (campaign_rank["HS leads"] > 0) &
-            (campaign_rank["Open deal"] == 0)
-        ].sort_values(["HS leads", "SAL"], ascending=[False, False])
-
-        if not pipeline_gap_campaigns.empty:
-            gap_names = pipeline_gap_campaigns["Campaign"].head(3).tolist()
-            opportunity_parts.append(
-                f"There is a clear lead-to-pipeline gap in campaigns that are generating engagement or leads without enough downstream deal creation. "
-                f"The top examples are {', '.join(gap_names)}. These campaigns are strong candidates for offer testing, qualification review, "
-                f"and tighter handoff into sales."
-            )
-
-    if not keyword_df.empty:
-        keyword_rollup = keyword_df.groupby("Keyword", as_index=False)[
-            ["Cost", "Clicks", "Impressions", "Conversions"]
-        ].sum()
-        keyword_rollup["CTR %"] = keyword_rollup.apply(
-            lambda r: safe_div(r["Clicks"], r["Impressions"]) * 100, axis=1
-        )
-        keyword_rollup["Cost / Conv."] = keyword_rollup.apply(
-            lambda r: safe_div(r["Cost"], r["Conversions"]), axis=1
-        )
-
-        high_spend_low_conv = keyword_rollup[
-            (keyword_rollup["Cost"] > keyword_rollup["Cost"].median()) &
-            (keyword_rollup["Conversions"] <= keyword_rollup["Conversions"].median())
-        ].sort_values("Cost", ascending=False)
-
-        if not high_spend_low_conv.empty:
-            kw_names = high_spend_low_conv["Keyword"].head(3).tolist()
-            efficiency_parts.append(
-                f"At the keyword level, the weakest efficiency is concentrated in {', '.join(kw_names)}. "
-                f"These terms are consuming budget without converting strongly enough and should be reviewed for match type control, "
-                f"search term pruning, and bid adjustments."
-            )
-
-        high_impr_low_ctr = keyword_rollup[
-            (keyword_rollup["Impressions"] > keyword_rollup["Impressions"].median()) &
-            (keyword_rollup["CTR %"] < keyword_rollup["CTR %"].median())
-        ].sort_values("Impressions", ascending=False)
-
-        if not high_impr_low_ctr.empty:
-            kw_opp_names = high_impr_low_ctr["Keyword"].head(3).tolist()
-            opportunity_parts.append(
-                f"One missed opportunity is in keywords with meaningful visibility but weak click-through rates, especially {', '.join(kw_opp_names)}. "
-                f"These are good candidates for message refinement, stronger ad copy, and more specific intent segmentation."
-            )
-
-    if not summary_parts:
-        summary_parts.append("Paid performance data is available, but there is not enough clean detail to summarize it confidently.")
-
-    if not efficiency_parts:
-        efficiency_parts.append("No major efficiency outlier stands out in the selected slice, which suggests spend is relatively concentrated and controlled.")
-
-    if not opportunity_parts:
-        opportunity_parts.append("No obvious missed opportunity dominates the current view. The next lever may be scaling what is already converting efficiently.")
-
-    return {
-        "summary": " ".join(summary_parts),
-        "efficiency": " ".join(efficiency_parts),
-        "opportunity": " ".join(opportunity_parts),
-    }
-
-
 def percentage_columns(df: pd.DataFrame):
     pct_cols = []
     for col in df.columns:
@@ -442,7 +339,8 @@ def currency_columns(df: pd.DataFrame):
 def style_dataframe(df: pd.DataFrame):
     pct_cols = percentage_columns(df)
     money_cols = currency_columns(df)
-    int_cols = [c for c in df.columns if c not in pct_cols and c not in money_cols and c != "Keyword" and c != "Campaign" and c != "Country"]
+    label_cols = {"Keyword", "Campaign", "Country"}
+    int_cols = [c for c in df.columns if c not in pct_cols and c not in money_cols and c not in label_cols]
 
     format_map = {}
     for c in pct_cols:
@@ -453,6 +351,188 @@ def style_dataframe(df: pd.DataFrame):
         format_map[c] = lambda x: "--" if pd.isna(x) else f"{round(x):,}"
 
     return df.style.format(format_map)
+
+
+def build_paid_analysis(campaign_df: pd.DataFrame, keyword_df: pd.DataFrame, geo_df: pd.DataFrame):
+    bullets = {
+        "overall": [],
+        "optimization": [],
+        "opportunity": [],
+    }
+
+    if not campaign_df.empty:
+        total_spend = campaign_df["Cost"].sum()
+        total_clicks = campaign_df["Clicks"].sum()
+        total_impr = campaign_df["Impr."].sum()
+        total_hs_leads = campaign_df["HS leads"].sum()
+        total_sal = campaign_df["SAL"].sum()
+        total_open_deals = campaign_df["Open deal"].sum()
+
+        overall_ctr = safe_div(total_clicks, total_impr) * 100
+        blended_cpl = safe_div(total_spend, total_hs_leads)
+        blended_cost_per_sal = safe_div(total_spend, total_sal)
+
+        bullets["overall"].append(
+            f"Paid search delivered {fmt_money(total_spend)} in spend, {fmt_number(total_clicks)} clicks, {fmt_number(total_hs_leads)} HS leads, {fmt_number(total_sal)} SALs, and {fmt_number(total_open_deals)} open deals in the selected period."
+        )
+        bullets["overall"].append(
+            f"Blended CTR is {fmt_pct(overall_ctr)}, blended CPL is {fmt_money(blended_cpl)}, and blended cost per SAL is {fmt_money(blended_cost_per_sal)}."
+        )
+
+        campaign_rank = campaign_df.groupby("Campaign", as_index=False)[
+            ["Cost", "Clicks", "Impr.", "HS leads", "SAL", "Open deal"]
+        ].sum()
+
+        campaign_rank["CTR %"] = campaign_rank.apply(
+            lambda r: safe_div(r["Clicks"], r["Impr."]) * 100, axis=1
+        )
+        campaign_rank["CPL"] = campaign_rank.apply(
+            lambda r: safe_div(r["Cost"], r["HS leads"]), axis=1
+        )
+        campaign_rank["Cost per SAL"] = campaign_rank.apply(
+            lambda r: safe_div(r["Cost"], r["SAL"]), axis=1
+        )
+
+        best_campaign = campaign_rank.sort_values(
+            ["Open deal", "SAL", "HS leads"], ascending=[False, False, False]
+        ).head(1)
+
+        if not best_campaign.empty:
+            row = best_campaign.iloc[0]
+            bullets["overall"].append(
+                f"The strongest campaign currently is {row['Campaign']}, generating {fmt_number(row['HS leads'])} HS leads, {fmt_number(row['SAL'])} SALs, and {fmt_number(row['Open deal'])} open deals."
+            )
+
+        inefficient_campaigns = campaign_rank[
+            (campaign_rank["Cost"] > campaign_rank["Cost"].median()) &
+            (campaign_rank["HS leads"] <= campaign_rank["HS leads"].median())
+        ].sort_values("Cost", ascending=False)
+
+        if not inefficient_campaigns.empty:
+            names = inefficient_campaigns["Campaign"].head(3).tolist()
+            bullets["optimization"].append(
+                f"Highest spend concentration with weaker downstream efficiency is showing up in {', '.join(names)}. These campaigns are taking budget without returning enough HS lead volume."
+            )
+
+        pipeline_leak = campaign_rank[
+            (campaign_rank["HS leads"] > 0) &
+            (campaign_rank["Open deal"] == 0)
+        ].sort_values(["HS leads", "SAL"], ascending=[False, False])
+
+        if not pipeline_leak.empty:
+            names = pipeline_leak["Campaign"].head(3).tolist()
+            bullets["optimization"].append(
+                f"There is lead-to-pipeline leakage in {', '.join(names)}, where top-of-funnel activity is not translating into open deal creation."
+            )
+
+        strong_lead_weak_ctr = campaign_rank[
+            (campaign_rank["HS leads"] > campaign_rank["HS leads"].median()) &
+            (campaign_rank["CTR %"] < campaign_rank["CTR %"].median())
+        ].sort_values("HS leads", ascending=False)
+
+        if not strong_lead_weak_ctr.empty:
+            names = strong_lead_weak_ctr["Campaign"].head(3).tolist()
+            bullets["opportunity"].append(
+                f"{', '.join(names)} appear to convert despite lower CTR. That suggests message efficiency could still be improved and scaled if click capture gets stronger."
+            )
+
+    if not keyword_df.empty:
+        kw = keyword_df.groupby("Keyword", as_index=False)[
+            ["Cost", "Clicks", "Impressions", "Conversions"]
+        ].sum()
+
+        kw["CTR %"] = kw.apply(lambda r: safe_div(r["Clicks"], r["Impressions"]) * 100, axis=1)
+        kw["Conv Rate %"] = kw.apply(lambda r: safe_div(r["Conversions"], r["Clicks"]) * 100, axis=1)
+        kw["Cost / Conv."] = kw.apply(lambda r: safe_div(r["Cost"], r["Conversions"]), axis=1)
+
+        best_kw = kw.sort_values(["Conversions", "Conv Rate %"], ascending=[False, False]).head(3)
+        if not best_kw.empty:
+            names = best_kw["Keyword"].tolist()
+            bullets["overall"].append(
+                f"Top converting enabled keywords are {', '.join(names)}."
+            )
+
+        costly_kw = kw[
+            (kw["Cost"] > kw["Cost"].median()) &
+            (kw["Conversions"] <= kw["Conversions"].median())
+        ].sort_values("Cost", ascending=False)
+
+        if not costly_kw.empty:
+            names = costly_kw["Keyword"].head(3).tolist()
+            bullets["optimization"].append(
+                f"The most obvious keyword inefficiency is concentrated in {', '.join(names)}, where spend is elevated but conversion output is not keeping up."
+            )
+
+        high_impr_low_ctr = kw[
+            (kw["Impressions"] > kw["Impressions"].median()) &
+            (kw["CTR %"] < kw["CTR %"].median())
+        ].sort_values("Impressions", ascending=False)
+
+        if not high_impr_low_ctr.empty:
+            names = high_impr_low_ctr["Keyword"].head(3).tolist()
+            bullets["opportunity"].append(
+                f"The cleanest missed keyword opportunity is in {', '.join(names)}, which have visibility but are not capturing enough clicks. That usually points to ad copy, intent matching, or offer framing issues."
+            )
+
+    if not geo_df.empty:
+        geo_rollup = geo_df.groupby("Location", as_index=False)[
+            ["Cost", "Interactions", "Impr.", "Conversions"]
+        ].sum()
+
+        geo_rollup["Interaction Rate %"] = geo_rollup.apply(
+            lambda r: safe_div(r["Interactions"], r["Impr."]) * 100, axis=1
+        )
+        geo_rollup["Conv Rate %"] = geo_rollup.apply(
+            lambda r: safe_div(r["Conversions"], r["Interactions"]) * 100, axis=1
+        )
+        geo_rollup["Cost / Conv."] = geo_rollup.apply(
+            lambda r: safe_div(r["Cost"], r["Conversions"]), axis=1
+        )
+
+        best_geo = geo_rollup.sort_values(["Conversions", "Conv Rate %"], ascending=[False, False]).head(3)
+        if not best_geo.empty:
+            names = best_geo["Location"].tolist()
+            bullets["overall"].append(
+                f"Top GEOs by conversion contribution are {', '.join(names)}."
+            )
+
+        weak_geo = geo_rollup[
+            (geo_rollup["Cost"] > geo_rollup["Cost"].median()) &
+            (geo_rollup["Conversions"] <= geo_rollup["Conversions"].median())
+        ].sort_values("Cost", ascending=False)
+
+        if not weak_geo.empty:
+            names = weak_geo["Location"].head(3).tolist()
+            bullets["optimization"].append(
+                f"At the GEO level, the weakest efficiency appears in {', '.join(names)}, where spend is not converting proportionally."
+            )
+
+        strong_geo_low_spend = geo_rollup[
+            (geo_rollup["Conversions"] > geo_rollup["Conversions"].median()) &
+            (geo_rollup["Cost"] < geo_rollup["Cost"].median())
+        ].sort_values("Conversions", ascending=False)
+
+        if not strong_geo_low_spend.empty:
+            names = strong_geo_low_spend["Location"].head(3).tolist()
+            bullets["opportunity"].append(
+                f"There may be room to scale stronger GEO pockets such as {', '.join(names)}, which are converting relatively well without being the biggest spend centers."
+            )
+
+    for key in bullets:
+        if not bullets[key]:
+            if key == "overall":
+                bullets[key] = ["No strong high-confidence summary is available yet for the selected slice."]
+            elif key == "optimization":
+                bullets[key] = ["No major outlier is standing out in this filtered view."]
+            else:
+                bullets[key] = ["No single missed opportunity dominates the current filtered view."]
+
+    return bullets
+
+
+def bullets_to_html(items):
+    li_html = "".join([f"<li>{item}</li>" for item in items])
+    return f"<ul>{li_html}</ul>"
 
 # ------------------------------------------------
 # LOAD DATA
@@ -486,7 +566,6 @@ except Exception:
 # ------------------------------------------------
 
 if data_loaded:
-    # Keywords
     keywords_df["Month_dt"] = parse_month(keywords_df["Month"])
     keywords_df["Keyword"] = keywords_df["Keyword"].astype(str).str.strip().str.replace('"', "", regex=False)
     keywords_df["Keyword status"] = keywords_df["Keyword status"].astype(str).str.strip()
@@ -505,7 +584,6 @@ if data_loaded:
         keywords_df["Keyword status"].str.lower() == "enabled"
     ].copy()
 
-    # GEO
     geo_df["Month_dt"] = parse_month(geo_df["Month"])
     geo_df["Location"] = geo_df["Location"].astype(str).str.strip()
 
@@ -523,7 +601,6 @@ if data_loaded:
 
     geo_df = geo_df[geo_df["Location"].apply(is_valid_country)].copy()
 
-    # Campaigns
     campaigns_df = build_campaign_rows(campaign_raw_df)
     if not campaigns_df.empty:
         campaigns_df["Month_dt"] = parse_month(campaigns_df["Month"])
@@ -554,6 +631,9 @@ if data_loaded:
         pd.Timestamp(m).strftime("%b %Y"): pd.Timestamp(m) for m in available_months
     }
 
+    q4_2025_labels = [label for label in available_month_labels if label in ["Oct 2025", "Nov 2025", "Dec 2025"]]
+    q1_2026_labels = [label for label in available_month_labels if label in ["Jan 2026", "Feb 2026", "Mar 2026"]]
+
     available_countries = sorted(geo_df["Location"].dropna().unique().tolist())
 else:
     enabled_keywords = pd.DataFrame()
@@ -562,6 +642,8 @@ else:
     available_months = []
     available_month_labels = []
     month_label_to_value = {}
+    q4_2025_labels = []
+    q1_2026_labels = []
     available_countries = []
 
 # ------------------------------------------------
@@ -628,19 +710,10 @@ with tab1:
         """, unsafe_allow_html=True)
 
 # ------------------------------------------------
-# GOOGLE PAID KEYWORDS TAB
+# GOOGLE PAID TAB
 # ------------------------------------------------
 
 with tab2:
-    st.markdown("""
-    <div class="glass-card">
-        <div class="section-title">Google Paid Keywords</div>
-        <p style="color: rgba(255,255,255,0.78) !important;">
-            This section combines campaign summary, enabled keyword performance, and country-level GEO analysis.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
     if not data_loaded:
         st.error("Google Paid data files were not found. Please add all 3 files to the data folder.")
         st.code(
@@ -653,27 +726,56 @@ with tab2:
             <div class="section-title">Filters</div>
         """, unsafe_allow_html=True)
 
-        filter_col1, filter_col2 = st.columns(2)
+        date_col, country_col = st.columns(2)
 
-        with filter_col1:
-            selected_month_labels = st.multiselect(
-                "Dates",
-                options=available_month_labels,
-                default=available_month_labels,
-                placeholder="Select one or more months"
+        with date_col:
+            st.markdown("**Dates**")
+            date_mode = st.radio(
+                "Date Preset",
+                options=["All", "Q4 2025", "Q1 2026", "Custom"],
+                horizontal=True,
+                label_visibility="collapsed"
             )
 
-        with filter_col2:
+            if date_mode == "All":
+                selected_month_labels = available_month_labels
+                st.markdown('<div class="green-chip">All available months selected</div>', unsafe_allow_html=True)
+            elif date_mode == "Q4 2025":
+                selected_month_labels = q4_2025_labels
+                st.markdown('<div class="green-chip">Q4 2025 selected</div>', unsafe_allow_html=True)
+            elif date_mode == "Q1 2026":
+                selected_month_labels = q1_2026_labels
+                st.markdown('<div class="green-chip">Q1 2026 selected</div>', unsafe_allow_html=True)
+            else:
+                selected_month_labels = st.multiselect(
+                    "Custom Dates",
+                    options=available_month_labels,
+                    default=available_month_labels,
+                    placeholder="Select one or more months"
+                )
+
+        with country_col:
+            st.markdown("**Countries**")
             selected_countries = st.multiselect(
-                "Countries",
+                "Country Picker",
                 options=available_countries,
                 default=available_countries,
-                placeholder="Select one or more countries"
+                placeholder="Select one or more countries",
+                label_visibility="collapsed"
             )
+
+            if len(selected_countries) == len(available_countries):
+                country_summary = "All countries selected"
+            elif len(selected_countries) == 0:
+                country_summary = "No countries selected"
+            else:
+                country_summary = f"{len(selected_countries)} countries selected"
+
+            st.markdown(f'<div class="filter-summary">{country_summary}</div>', unsafe_allow_html=True)
 
         st.markdown("""
             <p class="small-note">
-                Dates and countries can be selected independently. Country filtering applies to the GEO table and trend. The country list includes only country-level values.
+                Date and country filters are independent. The country selector only contains valid country rows and excludes aggregates or sub-regions.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -708,7 +810,6 @@ with tab2:
         else:
             filtered_geo = filtered_geo.iloc[0:0].copy()
 
-        # KPI row
         total_spend = filtered_campaigns["Cost"].sum() if not filtered_campaigns.empty else filtered_keywords["Cost"].sum()
         total_clicks = filtered_campaigns["Clicks"].sum() if not filtered_campaigns.empty else filtered_keywords["Clicks"].sum()
         total_hs_leads = filtered_campaigns["HS leads"].sum() if not filtered_campaigns.empty and "HS leads" in filtered_campaigns.columns else 0
@@ -752,8 +853,7 @@ with tab2:
             </div>
             """, unsafe_allow_html=True)
 
-        # Analysis
-        paid_analysis = build_paid_analysis(filtered_campaigns, filtered_keywords)
+        paid_analysis = build_paid_analysis(filtered_campaigns, filtered_keywords, filtered_geo)
 
         st.markdown("""
         <div class="glass-card">
@@ -763,50 +863,37 @@ with tab2:
         st.markdown(f"""
         <div class="insight-box">
             <div class="insight-title">Overall Performance</div>
-            <div class="insight-text">{paid_analysis["summary"]}</div>
+            <div class="insight-text">{bullets_to_html(paid_analysis["overall"])}</div>
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown(f"""
         <div class="insight-box">
             <div class="insight-title">Where We Are Not Optimized Enough</div>
-            <div class="insight-text">{paid_analysis["efficiency"]}</div>
+            <div class="insight-text">{bullets_to_html(paid_analysis["optimization"])}</div>
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown(f"""
         <div class="insight-box">
             <div class="insight-title">Where We Are Missing Opportunities</div>
-            <div class="insight-text">{paid_analysis["opportunity"]}</div>
+            <div class="insight-text">{bullets_to_html(paid_analysis["opportunity"])}</div>
         </div>
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown("<hr>", unsafe_allow_html=True)
 
-        # Campaign Summary
         st.markdown("""
         <div class="glass-card">
             <div class="section-title">Campaign Summary</div>
             <p style="color: rgba(255,255,255,0.78) !important;">
-                High-level campaign outcomes across spend, traffic, leads, and downstream pipeline.
+                Unified sortable campaign table focused on spend, traffic, leads, and downstream pipeline.
             </p>
         </div>
         """, unsafe_allow_html=True)
 
-        campaign_trend = pd.DataFrame()
         if not filtered_campaigns.empty:
-            campaign_trend = (
-                filtered_campaigns.groupby("Month_dt", as_index=False)[
-                    ["Cost", "Clicks", "HS leads", "Open deal"]
-                ]
-                .sum()
-                .sort_values("Month_dt")
-                .set_index("Month_dt")
-            )
-            st.markdown("#### Campaign Trend")
-            st.line_chart(campaign_trend)
-
             campaign_table = (
                 filtered_campaigns.groupby("Campaign", as_index=False)[
                     ["Impr.", "Clicks", "Cost", "HS leads", "SAL", "Open deal"]
@@ -845,36 +932,23 @@ with tab2:
             st.dataframe(
                 style_dataframe(campaign_table),
                 use_container_width=True,
-                height=420
+                height=430
             )
         else:
             st.info("No campaign summary data is available for the selected dates.")
 
         st.markdown("<hr>", unsafe_allow_html=True)
 
-        # Keyword Section
         st.markdown("""
         <div class="glass-card">
             <div class="section-title">Enabled Keyword Performance</div>
             <p style="color: rgba(255,255,255,0.78) !important;">
-                One unified table with all enabled keywords in the selected date range. You can sort every column directly in the table.
+                Unified sortable table with all enabled keywords in the selected date range.
             </p>
         </div>
         """, unsafe_allow_html=True)
 
         if not filtered_keywords.empty:
-            monthly_keywords = (
-                filtered_keywords.groupby("Month_dt", as_index=False)[
-                    ["Clicks", "Conversions", "Cost", "Impressions"]
-                ]
-                .sum()
-                .sort_values("Month_dt")
-                .set_index("Month_dt")
-            )
-
-            st.markdown("#### Keyword Trend")
-            st.line_chart(monthly_keywords[["Clicks", "Conversions", "Cost"]])
-
             keyword_table = (
                 filtered_keywords.groupby("Keyword", as_index=False)[
                     ["Interactions", "Clicks", "Impressions", "Cost", "Conversions"]
@@ -891,9 +965,10 @@ with tab2:
             keyword_table["Avg. CPC"] = keyword_table.apply(
                 lambda r: safe_div(r["Cost"], r["Clicks"]), axis=1
             )
-            keyword_table["Max. CPC"] = (
-                filtered_keywords.groupby("Keyword", as_index=False)["Max. CPC"].max()["Max. CPC"]
-            )
+
+            max_cpc_map = filtered_keywords.groupby("Keyword")["Max. CPC"].max().to_dict()
+            keyword_table["Max. CPC"] = keyword_table["Keyword"].map(max_cpc_map)
+
             keyword_table["Cost / Conv."] = keyword_table.apply(
                 lambda r: safe_div(r["Cost"], r["Conversions"]), axis=1
             )
@@ -917,36 +992,23 @@ with tab2:
             st.dataframe(
                 style_dataframe(keyword_table),
                 use_container_width=True,
-                height=500
+                height=520
             )
         else:
             st.info("No enabled keyword data is available for the selected dates.")
 
         st.markdown("<hr>", unsafe_allow_html=True)
 
-        # GEO Section
         st.markdown("""
         <div class="glass-card">
             <div class="section-title">GEO Performance</div>
             <p style="color: rgba(255,255,255,0.78) !important;">
-                One unified country-level table only. Non-country rows are excluded automatically. Dates and country filters both apply here.
+                Unified sortable country table only. Non-country rows are excluded automatically. Date and country filters both apply here.
             </p>
         </div>
         """, unsafe_allow_html=True)
 
         if not filtered_geo.empty:
-            monthly_geo = (
-                filtered_geo.groupby("Month_dt", as_index=False)[
-                    ["Interactions", "Conversions", "Cost", "Impr."]
-                ]
-                .sum()
-                .sort_values("Month_dt")
-                .set_index("Month_dt")
-            )
-
-            st.markdown("#### GEO Trend")
-            st.line_chart(monthly_geo[["Interactions", "Conversions", "Cost"]])
-
             geo_table = (
                 filtered_geo.groupby("Location", as_index=False)[
                     ["Impr.", "Interactions", "Cost", "Conversions"]
@@ -985,7 +1047,7 @@ with tab2:
             st.dataframe(
                 style_dataframe(geo_table),
                 use_container_width=True,
-                height=500
+                height=520
             )
         else:
             st.info("No country-level GEO data is available for the selected filters.")
