@@ -2,18 +2,18 @@ import streamlit as st
 import pandas as pd
 import os
 
-# --- 1. BRANDING & THEME CONFIG ---
+# --- 1. MANDATORY THEME CONFIG ---
 st.set_page_config(page_title="Quicklizard Marketing Dashboard", layout="wide")
 
-# CSS to force Deep Black Background and Crisp White Text
+# CSS to force Deep Black Background and High-Contrast White Text
 st.markdown("""
     <style>
     .stApp { background-color: #000000 !important; color: #ffffff !important; }
     section[data-testid="stSidebar"] { background-color: #050505 !important; border-right: 1px solid #222222; }
     section[data-testid="stSidebar"] * { color: #ffffff !important; }
-    h1, h2, h3, h4, p, span, label, .stMarkdown { color: #ffffff !important; font-family: 'Helvetica Neue', sans-serif; }
+    h1, h2, h3, h4, p, span, label, div, .stMarkdown { color: #ffffff !important; font-family: 'Helvetica Neue', sans-serif; }
     
-    /* Campaign Box Styling */
+    /* Campaign Square Styling */
     .campaign-container {
         border: 1px solid #ffffff;
         padding: 20px;
@@ -22,33 +22,30 @@ st.markdown("""
         background-color: #000000;
     }
     
-    /* Clean Metric Boxes */
-    div[data-testid="metric-container"] {
-        border: 1px solid #333333;
-        padding: 15px;
-        background-color: #0a0a0a;
-    }
-    div[data-testid="stMetricValue"] { color: #ffffff !important; }
-    div[data-testid="stMetricLabel"] { color: #888888 !important; }
+    /* Table Visibility */
+    .stDataFrame, div[data-testid="stTable"] { border: 1px solid #333333; background-color: #000000; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. PERMANENT HEADER ---
+# --- 2. THE PERMANENT HEADER ---
 col_logo, col_title = st.columns([1, 4])
 with col_logo:
     st.image("https://quicklizard.com/wp-content/uploads/2021/03/Quicklizard-Logo-1.png", width=180)
 with col_title:
     st.markdown("<h1 style='margin-top: 10px;'>Quicklizard Marketing Dashboard</h1>", unsafe_allow_html=True)
 
+# --- 3. TAB SELECTION & SUBHEADER ---
+# We are building this one-by-one, starting with Google Paid Search
 st.markdown("### Google Paid Search")
 st.markdown("---")
 
-# --- 3. DATA ENGINE ---
+# --- 4. DATA ENGINE ---
 @st.cache_data
 def load_and_clean(file, skip=0):
     if not os.path.exists(file): return pd.DataFrame()
     df = pd.read_csv(file, skiprows=skip)
-    # Clean numeric columns (remove %, $, and ,)
+    
+    # Standard cleaning for numeric conversion
     for col in df.columns:
         if df[col].dtype == 'object':
             df[col] = df[col].astype(str).str.replace(r'[%\$,]', '', regex=True).replace(['--', ' --'], '0')
@@ -60,16 +57,11 @@ def load_and_clean(file, skip=0):
         df = df[(df['Cost'] > 0) & (df['Impr.'] > 0)]
     return df
 
+# Loading the two new CSVs you provided
 df_keywords = load_and_clean("New Search Report Google Paid.csv", skip=2)
-df_geo = load_and_clean("New Location Report Google Paid.csv", skip=2)
+df_locations = load_and_clean("New Location Report Google Paid.csv", skip=2)
 
-# --- 4. SIDEBAR ---
-with st.sidebar:
-    st.image("https://quicklizard.com/wp-content/uploads/2021/03/Quicklizard-Logo-1.png", width=150)
-    st.markdown("## Quicklizard Menu")
-    st.info("Current Focus: Paid Search Performance Analysis")
-
-# --- 5. NARRATIVE & ANALYSIS ---
+# --- 5. THE NARRATIVE ---
 st.markdown("""
 ### Strategic Overview: Investing in Intent
 Google Paid Search is our 'active acquisition engine.' Unlike other channels, this is where we pay to be at the top of the conversation when a potential client is searching for a solution to their pricing challenges. 
@@ -81,37 +73,38 @@ Google Paid Search is our 'active acquisition engine.' Unlike other channels, th
 st.markdown("---")
 st.markdown("### Active Campaign Performance")
 
-# Create containers for each segment
-segments = {
-    "North America": df_keywords[df_keywords['Campaign'].str.contains('NA|USA', case=False, na=False)],
-    "Europe (EMEA)": df_keywords[df_keywords['Campaign'].str.contains('Germany|EMEA|Moranne', case=False, na=False)],
-    "Thought Leadership": df_keywords[df_keywords['Campaign'].str.contains('TL|Thought', case=False, na=False)]
-}
+# Mapping your spreadsheet campaigns into the 3 requested squares
+if not df_keywords.empty:
+    col_na, col_emea, col_tl = st.columns(3)
+    
+    with col_na:
+        st.markdown("#### North America (NA)")
+        na_data = df_keywords[df_keywords['Campaign'].str.contains('NA|USA', case=False, na=False)]
+        if not na_data.empty:
+            na_cols = st.multiselect("Filter NA Columns", na_data.columns.tolist(), default=['Month', 'Keyword', 'Interactions', 'Cost'], key="na")
+            st.dataframe(na_data[na_cols], use_container_width=True)
+        else: st.write("No active NA data found.")
 
-for name, data in segments.items():
-    with st.container():
-        st.markdown(f"#### {name}")
-        if not data.empty:
-            # Metric row for the square
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Interactions", f"{int(data['Interactions'].sum()):,}")
-            m2.metric("Total Spend", f"${data['Cost'].sum():,.2f}")
-            m3.metric("Avg. Interaction Rate", f"{data['Interaction rate'].mean():.2f}%")
-            
-            # Interactive Filter/Table
-            cols_to_show = st.multiselect(f"Filter {name} Columns", data.columns.tolist(), default=['Month', 'Keyword', 'Interactions', 'Cost'], key=name)
-            st.dataframe(data[cols_to_show], use_container_width=True)
-        else:
-            st.write(f"No active data for {name} in the current period.")
-        st.markdown("<br>", unsafe_allow_html=True)
+    with col_emea:
+        st.markdown("#### Europe (EMEA)")
+        emea_data = df_keywords[df_keywords['Campaign'].str.contains('Germany|EMEA|Moranne', case=False, na=False)]
+        if not emea_data.empty:
+            emea_cols = st.multiselect("Filter EMEA Columns", emea_data.columns.tolist(), default=['Month', 'Keyword', 'Interactions', 'Cost'], key="emea")
+            st.dataframe(emea_data[emea_cols], use_container_width=True)
+        else: st.write("No active EMEA data found.")
 
-# --- 7. GEOGRAPHIC REACH ---
+    with col_tl:
+        st.markdown("#### Thought Leadership (TL)")
+        tl_data = df_keywords[df_keywords['Campaign'].str.contains('TL|Thought', case=False, na=False)]
+        if not tl_data.empty:
+            tl_cols = st.multiselect("Filter TL Columns", tl_data.columns.tolist(), default=['Month', 'Keyword', 'Interactions', 'Cost'], key="tl")
+            st.dataframe(tl_data[tl_cols], use_container_width=True)
+        else: st.write("No active TL data found.")
+
+# --- 7. GEOGRAPHIC PERFORMANCE ---
 st.markdown("---")
 st.markdown("### Strategic Geographic Deployment")
-st.markdown("""
-Our geographic data tracks where our investment is most 'sticky.' We are looking for regions where our cost per interaction is low, allowing us to reallocate budget from expensive, low-performing zones to high-efficiency growth markets.
-""")
-
-if not df_geo.empty:
-    geo_cols = ['Month', 'Location', 'Campaign', 'Impr.', 'Interactions', 'Cost']
-    st.dataframe(df_geo[geo_cols], use_container_width=True)
+if not df_locations.empty:
+    # Remove rows where Location is empty or a total summary
+    clean_geo = df_locations[df_locations['Location'].notna()]
+    st.dataframe(clean_geo[['Month', 'Location', 'Campaign', 'Impr.', 'Interactions', 'Cost']], use_container_width=True)
