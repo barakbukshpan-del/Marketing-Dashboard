@@ -241,10 +241,8 @@ def is_valid_country(location_value: str) -> bool:
 
     if value == "":
         return False
-
     if value.startswith("Total:"):
         return False
-
     if "," in value:
         return False
 
@@ -395,6 +393,11 @@ def style_dataframe(df: pd.DataFrame):
         format_map[c] = lambda x: "--" if pd.isna(x) else f"{round(x):,}"
 
     return df.style.format(format_map)
+
+
+def bullets_to_html(items):
+    li_html = "".join([f"<li>{item}</li>" for item in items])
+    return f"<ul>{li_html}</ul>"
 
 
 def build_paid_analysis(campaign_df: pd.DataFrame, keyword_df: pd.DataFrame, geo_df: pd.DataFrame):
@@ -574,9 +577,175 @@ def build_paid_analysis(campaign_df: pd.DataFrame, keyword_df: pd.DataFrame, geo
     return bullets
 
 
-def bullets_to_html(items):
-    li_html = "".join([f"<li>{item}</li>" for item in items])
-    return f"<ul>{li_html}</ul>"
+def build_campaign_section_analysis(campaign_df: pd.DataFrame):
+    bullets = []
+
+    if campaign_df.empty:
+        return ["No campaign-level data is available for the selected filters."]
+
+    summary = campaign_df.groupby("Campaign", as_index=False)[
+        ["Cost", "Clicks", "Impr.", "HS leads", "SAL", "Open deal"]
+    ].sum()
+
+    summary["CTR %"] = summary.apply(lambda r: safe_div(r["Clicks"], r["Impr."]) * 100, axis=1)
+    summary["CPL"] = summary.apply(lambda r: safe_div(r["Cost"], r["HS leads"]), axis=1)
+    summary["Cost per SAL"] = summary.apply(lambda r: safe_div(r["Cost"], r["SAL"]), axis=1)
+
+    top_spend = summary.sort_values("Cost", ascending=False).head(1)
+    top_pipeline = summary.sort_values(["Open deal", "SAL", "HS leads"], ascending=[False, False, False]).head(1)
+    weak_eff = summary[
+        (summary["Cost"] > summary["Cost"].median()) &
+        (summary["HS leads"] <= summary["HS leads"].median())
+    ].sort_values("Cost", ascending=False).head(3)
+
+    if not top_spend.empty:
+        row = top_spend.iloc[0]
+        bullets.append(
+            f"{row['Campaign']} is the highest-spend campaign at {fmt_money(row['Cost'])}, generating {fmt_number(row['HS leads'])} HS leads and {fmt_number(row['Open deal'])} open deals."
+        )
+
+    if not top_pipeline.empty:
+        row = top_pipeline.iloc[0]
+        bullets.append(
+            f"{row['Campaign']} is currently the strongest downstream campaign, leading on pipeline outcomes with {fmt_number(row['Open deal'])} open deals."
+        )
+
+    if not weak_eff.empty:
+        bullets.append(
+            f"Campaign efficiency pressure is concentrated in {', '.join(weak_eff['Campaign'].tolist())}, where spend is relatively high versus HS lead output."
+        )
+
+    low_ctr_strong_lead = summary[
+        (summary["CTR %"] < summary["CTR %"].median()) &
+        (summary["HS leads"] > summary["HS leads"].median())
+    ].sort_values("HS leads", ascending=False).head(2)
+
+    if not low_ctr_strong_lead.empty:
+        bullets.append(
+            f"{', '.join(low_ctr_strong_lead['Campaign'].tolist())} appear to outperform despite lower CTR, which suggests room to scale if click capture improves."
+        )
+
+    pipeline_gap = summary[
+        (summary["HS leads"] > 0) &
+        (summary["Open deal"] == 0)
+    ].sort_values(["HS leads", "SAL"], ascending=[False, False]).head(3)
+
+    if not pipeline_gap.empty:
+        bullets.append(
+            f"Lead-to-pipeline leakage is visible in {', '.join(pipeline_gap['Campaign'].tolist())}, where lead generation is not converting into open deal creation."
+        )
+
+    return bullets or ["No strong campaign anomaly stands out in the current filtered view."]
+
+
+def build_keyword_section_analysis(keyword_df: pd.DataFrame):
+    bullets = []
+
+    if keyword_df.empty:
+        return ["No keyword-level data is available for the selected filters."]
+
+    kw = keyword_df.groupby("Keyword", as_index=False)[
+        ["Cost", "Clicks", "Impressions", "Conversions"]
+    ].sum()
+
+    kw["CTR %"] = kw.apply(lambda r: safe_div(r["Clicks"], r["Impressions"]) * 100, axis=1)
+    kw["Conv Rate %"] = kw.apply(lambda r: safe_div(r["Conversions"], r["Clicks"]) * 100, axis=1)
+    kw["Cost / Conv."] = kw.apply(lambda r: safe_div(r["Cost"], r["Conversions"]), axis=1)
+
+    top_conv = kw.sort_values(["Conversions", "Conv Rate %"], ascending=[False, False]).head(3)
+    if not top_conv.empty:
+        bullets.append(
+            f"Top keyword performers by conversion are {', '.join(top_conv['Keyword'].tolist())}."
+        )
+
+    costly_kw = kw[
+        (kw["Cost"] > kw["Cost"].median()) &
+        (kw["Conversions"] <= kw["Conversions"].median())
+    ].sort_values("Cost", ascending=False).head(3)
+
+    if not costly_kw.empty:
+        bullets.append(
+            f"The clearest keyword inefficiency sits in {', '.join(costly_kw['Keyword'].tolist())}, where spend is heavier than conversion return."
+        )
+
+    high_vis_low_ctr = kw[
+        (kw["Impressions"] > kw["Impressions"].median()) &
+        (kw["CTR %"] < kw["CTR %"].median())
+    ].sort_values("Impressions", ascending=False).head(3)
+
+    if not high_vis_low_ctr.empty:
+        bullets.append(
+            f"The best missed click-through opportunity appears in {', '.join(high_vis_low_ctr['Keyword'].tolist())}, where visibility exists but click capture is underperforming."
+        )
+
+    strong_conv_low_click = kw[
+        (kw["Conv Rate %"] > kw["Conv Rate %"].median()) &
+        (kw["Clicks"] < kw["Clicks"].median())
+    ].sort_values("Conv Rate %", ascending=False).head(3)
+
+    if not strong_conv_low_click.empty:
+        bullets.append(
+            f"{', '.join(strong_conv_low_click['Keyword'].tolist())} look like under-scaled terms with better-than-average conversion efficiency but limited click volume."
+        )
+
+    return bullets or ["No strong keyword anomaly stands out in the current filtered view."]
+
+
+def build_global_section_analysis(geo_df: pd.DataFrame, campaign_df: pd.DataFrame, keyword_df: pd.DataFrame):
+    bullets = []
+
+    if geo_df.empty:
+        return ["No global country-level data is available for the selected filters."]
+
+    geo = geo_df.groupby(["Region", "Location"], as_index=False)[
+        ["Cost", "Interactions", "Impr.", "Conversions"]
+    ].sum()
+
+    geo["Interaction Rate %"] = geo.apply(lambda r: safe_div(r["Interactions"], r["Impr."]) * 100, axis=1)
+    geo["Conv Rate %"] = geo.apply(lambda r: safe_div(r["Conversions"], r["Interactions"]) * 100, axis=1)
+    geo["Cost / Conv."] = geo.apply(lambda r: safe_div(r["Cost"], r["Conversions"]), axis=1)
+
+    top_country = geo.sort_values(["Conversions", "Conv Rate %"], ascending=[False, False]).head(3)
+    if not top_country.empty:
+        bullets.append(
+            f"Top country contributors are {', '.join(top_country['Location'].tolist())}."
+        )
+
+    weak_country = geo[
+        (geo["Cost"] > geo["Cost"].median()) &
+        (geo["Conversions"] <= geo["Conversions"].median())
+    ].sort_values("Cost", ascending=False).head(3)
+
+    if not weak_country.empty:
+        bullets.append(
+            f"The weakest country-level efficiency is showing up in {', '.join(weak_country['Location'].tolist())}, where spend is not converting proportionally."
+        )
+
+    strong_country_low_spend = geo[
+        (geo["Conversions"] > geo["Conversions"].median()) &
+        (geo["Cost"] < geo["Cost"].median())
+    ].sort_values("Conversions", ascending=False).head(3)
+
+    if not strong_country_low_spend.empty:
+        bullets.append(
+            f"The strongest scale candidates appear to be {', '.join(strong_country_low_spend['Location'].tolist())}, which are producing conversions without being the biggest spend centers."
+        )
+
+    region_rollup = geo.groupby("Region", as_index=False)[["Cost", "Conversions"]].sum()
+    region_rollup["Cost / Conv."] = region_rollup.apply(lambda r: safe_div(r["Cost"], r["Conversions"]), axis=1)
+
+    best_region = region_rollup.sort_values(["Conversions", "Cost / Conv."], ascending=[False, True]).head(1)
+    if not best_region.empty:
+        bullets.append(
+            f"{best_region.iloc[0]['Region']} is the strongest region-level contributor in the current view."
+        )
+
+    if not campaign_df.empty and not keyword_df.empty:
+        bullets.append(
+            "Global performance should be read alongside campaign and keyword efficiency, since strong campaign or keyword output may still be concentrated in only a few GEO pockets."
+        )
+
+    return bullets or ["No strong global anomaly stands out in the current filtered view."]
 
 # ------------------------------------------------
 # LOAD DATA
@@ -679,7 +848,15 @@ if data_loaded:
     q4_2025_labels = [label for label in available_month_labels if label in ["Oct 2025", "Nov 2025", "Dec 2025"]]
     q1_2026_labels = [label for label in available_month_labels if label in ["Jan 2026", "Feb 2026", "Mar 2026"]]
 
-    available_countries = sorted(geo_df["Location"].dropna().unique().tolist())
+    available_regions = [
+        "UK",
+        "North America",
+        "DACH + BeNeLux",
+        "Nordics",
+        "ANZ",
+        "Rest of Europe",
+        "Rest of World",
+    ]
 else:
     enabled_keywords = pd.DataFrame()
     geo_df = pd.DataFrame()
@@ -689,7 +866,7 @@ else:
     month_label_to_value = {}
     q4_2025_labels = []
     q1_2026_labels = []
-    available_countries = []
+    available_regions = []
 
 # ------------------------------------------------
 # HEADER
@@ -771,7 +948,7 @@ with tab2:
             <div class="section-title">Filters</div>
         """, unsafe_allow_html=True)
 
-        date_col, country_col = st.columns(2)
+        date_col, region_col = st.columns(2)
 
         with date_col:
             st.markdown("**Dates**")
@@ -799,28 +976,32 @@ with tab2:
                     placeholder="Select one or more months"
                 )
 
-        with country_col:
-            st.markdown("**Countries**")
-            selected_countries = st.multiselect(
-                "Country Picker",
-                options=available_countries,
-                default=available_countries,
-                placeholder="Select one or more countries",
+        with region_col:
+            st.markdown("**Regions**")
+            region_mode = st.radio(
+                "Region Preset",
+                options=["All", "UK", "North America", "DACH + BeNeLux", "Nordics", "ANZ", "Rest of Europe", "Rest of World", "Custom"],
+                horizontal=True,
                 label_visibility="collapsed"
             )
 
-            if len(selected_countries) == len(available_countries):
-                country_summary = "All countries selected"
-            elif len(selected_countries) == 0:
-                country_summary = "No countries selected"
+            if region_mode == "All":
+                selected_regions = available_regions
+                st.markdown('<div class="green-chip">All regions selected</div>', unsafe_allow_html=True)
+            elif region_mode == "Custom":
+                selected_regions = st.multiselect(
+                    "Custom Regions",
+                    options=available_regions,
+                    default=available_regions,
+                    placeholder="Select one or more regions"
+                )
             else:
-                country_summary = f"{len(selected_countries)} countries selected"
-
-            st.markdown(f'<div class="filter-summary">{country_summary}</div>', unsafe_allow_html=True)
+                selected_regions = [region_mode]
+                st.markdown(f'<div class="green-chip">{region_mode} selected</div>', unsafe_allow_html=True)
 
         st.markdown("""
             <p class="small-note">
-                Date and country filters are independent. The country selector only contains valid country rows and excludes aggregates or sub-regions.
+                Date and region filters are independent. Global grouping follows UK, North America, DACH + BeNeLux, Nordics, ANZ, Rest of Europe, and Rest of World.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -848,10 +1029,8 @@ with tab2:
             filtered_geo = geo_df.iloc[0:0].copy()
             filtered_campaigns = campaigns_df.iloc[0:0].copy()
 
-        if selected_countries:
-            filtered_geo = filtered_geo[
-                filtered_geo["Location"].isin(selected_countries)
-            ].copy()
+        if selected_regions:
+            filtered_geo = filtered_geo[filtered_geo["Region"].isin(selected_regions)].copy()
         else:
             filtered_geo = filtered_geo.iloc[0:0].copy()
 
@@ -935,6 +1114,14 @@ with tab2:
         </div>
         """, unsafe_allow_html=True)
 
+        campaign_section_analysis = build_campaign_section_analysis(filtered_campaigns)
+        st.markdown(f"""
+        <div class="insight-box">
+            <div class="insight-title">Campaign Insights</div>
+            <div class="insight-text">{bullets_to_html(campaign_section_analysis)}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
         if not filtered_campaigns.empty:
             campaign_table = (
                 filtered_campaigns.groupby("Campaign", as_index=False)[
@@ -984,6 +1171,14 @@ with tab2:
         st.markdown("""
         <div class="glass-card">
             <div class="section-title">Keyword Performance</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        keyword_section_analysis = build_keyword_section_analysis(filtered_keywords)
+        st.markdown(f"""
+        <div class="insight-box">
+            <div class="insight-title">Keyword Insights</div>
+            <div class="insight-text">{bullets_to_html(keyword_section_analysis)}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1044,6 +1239,14 @@ with tab2:
         </div>
         """, unsafe_allow_html=True)
 
+        global_section_analysis = build_global_section_analysis(filtered_geo, filtered_campaigns, filtered_keywords)
+        st.markdown(f"""
+        <div class="insight-box">
+            <div class="insight-title">Global Insights</div>
+            <div class="insight-text">{bullets_to_html(global_section_analysis)}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
         if not filtered_geo.empty:
             geo_table = (
                 filtered_geo.groupby(["Region", "Location"], as_index=False)[
@@ -1079,7 +1282,7 @@ with tab2:
                     "Avg. Cost",
                     "Cost / Conv."
                 ]
-            ].sort_values(["Conversions", "Cost"], ascending=[False, False])
+            ].sort_values(["Region", "Conversions", "Cost"], ascending=[True, False, False])
 
             st.dataframe(
                 style_dataframe(geo_table),
