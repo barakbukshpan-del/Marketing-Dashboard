@@ -454,4 +454,4 @@ def build_paid_analysis(campaign_df: pd.DataFrame, keyword_df: pd.DataFrame, geo
         campaign_rank = campaign_df.groupby("Campaign", as_index=False)[["Cost", "Clicks", "Impr.", "HS leads", "SAL", "Open deal"]].sum()
         campaign_rank["CTR %"] = campaign_rank.apply(lambda r: safe_div(r["Clicks"], r["Impr."]) * 100, axis=1)
 
-        best = campaign_rank.sort_values(["Open deal", "SAL", "HS leads"], ascending=[False, False,
+best = campaign_rank.sort_values(["Open deal", "SAL", "HS leads"], ascending=[False, False, False]).head(1)
