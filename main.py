@@ -1298,4 +1298,4 @@ with tab4:
                 ["Campaign", "Impr.", "Clicks", "CTR %", "Cost", "Avg. CPC", "Leads", "CPL", "SAL", "Open deal", "Cost per SAL"]
             ].sort_values(["SAL", "Leads", "Open deal", "Cost"], ascending=[False, False, False, False])
 
-            st.dataframe(style_dataframe(li_table), use_container_width=True, height=
+            st.dataframe(style_dataframe(li_table), use_container_width=True, height=500)
