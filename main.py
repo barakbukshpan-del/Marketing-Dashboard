@@ -203,7 +203,7 @@ def clean_numeric(series):
 
 
 def safe_div(a, b):
-    if b == 0 or pd.isna(b):
+    if pd.isna(a) or pd.isna(b) or b == 0:
         return 0
     return a / b
 
@@ -389,69 +389,4 @@ def build_linkedin_rows(raw_df: pd.DataFrame) -> pd.DataFrame:
                 "CTR": row.iloc[7] if len(row) > 7 else None,
                 "Avg. CPC": row.iloc[8] if len(row) > 8 else None,
                 "CPL": row.iloc[9] if len(row) > 9 else None,
-                "SAL": row.iloc[11] if len(row) > 11 else None,
-                "Open deal": row.iloc[12] if len(row) > 12 else None,
-                "Cost per SAL": row.iloc[13] if len(row) > 13 else None,
-            }
-        )
-
-    return pd.DataFrame(rows)
-
-
-def percentage_columns(df: pd.DataFrame):
-    pct_cols = []
-    for col in df.columns:
-        lower = col.lower()
-        if "%" in col or "ctr" in lower or "rate" in lower:
-            pct_cols.append(col)
-    return pct_cols
-
-
-def currency_columns(df: pd.DataFrame):
-    money_cols = []
-    for col in df.columns:
-        lower = col.lower()
-        if "cost" in lower or "cpc" in lower or "cpl" in lower or "cpa" in lower:
-            money_cols.append(col)
-    return money_cols
-
-
-def style_dataframe(df: pd.DataFrame):
-    pct_cols = percentage_columns(df)
-    money_cols = currency_columns(df)
-    label_cols = {"Keyword", "Campaign", "Country", "Region"}
-    int_cols = [c for c in df.columns if c not in pct_cols and c not in money_cols and c not in label_cols]
-
-    format_map = {}
-    for c in pct_cols:
-        format_map[c] = lambda x: "--" if pd.isna(x) else f"{round(x)}%"
-    for c in money_cols:
-        format_map[c] = lambda x: "--" if pd.isna(x) else f"${round(x):,}"
-    for c in int_cols:
-        format_map[c] = lambda x: "--" if pd.isna(x) else f"{round(x):,}"
-
-    return df.style.format(format_map)
-
-
-def build_paid_analysis(campaign_df: pd.DataFrame, keyword_df: pd.DataFrame, geo_df: pd.DataFrame):
-    bullets = {"overall": [], "optimization": [], "opportunity": []}
-
-    if not campaign_df.empty:
-        spend = campaign_df["Cost"].sum()
-        clicks = campaign_df["Clicks"].sum()
-        impr = campaign_df["Impr."].sum()
-        hs_leads = campaign_df["HS leads"].sum()
-        sal = campaign_df["SAL"].sum()
-        deals = campaign_df["Open deal"].sum()
-
-        bullets["overall"].append(
-            f"{fmt_money(spend)} spend drove {fmt_number(clicks)} clicks, {fmt_number(hs_leads)} HS leads, {fmt_number(sal)} SALs, and {fmt_number(deals)} open deals."
-        )
-        bullets["overall"].append(
-            f"CTR is {fmt_pct(safe_div(clicks, impr) * 100)}, CPL is {fmt_money(safe_div(spend, hs_leads))}, and cost per SAL is {fmt_money(safe_div(spend, sal))}."
-        )
-
-        campaign_rank = campaign_df.groupby("Campaign", as_index=False)[["Cost", "Clicks", "Impr.", "HS leads", "SAL", "Open deal"]].sum()
-        campaign_rank["CTR %"] = campaign_rank.apply(lambda r: safe_div(r["Clicks"], r["Impr."]) * 100, axis=1)
-
-best = campaign_rank.sort_values(["Open deal", "SAL", "HS leads"], ascending=[False, False, False]).head(1)
+                "SAL": row.iloc[11] i
