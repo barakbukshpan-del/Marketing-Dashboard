@@ -379,7 +379,7 @@ def build_linkedin_rows(raw_df: pd.DataFrame) -> pd.DataFrame:
             continue
 
         rows.append(
-            {
+            {}
                 "Month": f"{current_month_name}-{str(current_year)[-2:]}",
                 "Campaign": col_b,
                 "Cost": row.iloc[2] if len(row) > 2 else None,
