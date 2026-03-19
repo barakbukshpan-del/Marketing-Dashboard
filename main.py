@@ -419,16 +419,19 @@ def currency_columns(df: pd.DataFrame):
 def style_dataframe(df: pd.DataFrame):
     pct_cols = percentage_columns(df)
     money_cols = currency_columns(df)
-    label_cols = {"Keyword", "Campaign", "Country", "Region", "Query", "Page", "Device", "Search appearance"}
-    int_cols = [c for c in df.columns if c not in pct_cols and c not in money_cols and c not in label_cols]
+    label_cols = {"Keyword", "Campaign", "Country", "Region", "Query", "Page", "Device", "Search appearance", "Month"}
 
     format_map = {}
-    for c in pct_cols:
-        format_map[c] = lambda x: "--" if pd.isna(x) else f"{round(x)}%"
-    for c in money_cols:
-        format_map[c] = lambda x: "--" if pd.isna(x) else f"${round(x):,}"
-    for c in int_cols:
-        format_map[c] = lambda x: "--" if pd.isna(x) else f"{round(x):,}"
+
+    for c in df.columns:
+        if c in label_cols:
+            continue
+        if c in pct_cols:
+            format_map[c] = lambda x: "--" if pd.isna(x) else f"{round(pd.to_numeric(x, errors='coerce'))}%" if pd.notna(pd.to_numeric(x, errors='coerce')) else str(x)
+        elif c in money_cols:
+            format_map[c] = lambda x: "--" if pd.isna(x) else f"${round(pd.to_numeric(x, errors='coerce')):,}" if pd.notna(pd.to_numeric(x, errors='coerce')) else str(x)
+        else:
+            format_map[c] = lambda x: "--" if pd.isna(x) else f"{round(pd.to_numeric(x, errors='coerce')):,}" if pd.notna(pd.to_numeric(x, errors='coerce')) else str(x)
 
     return df.style.format(format_map)
 
