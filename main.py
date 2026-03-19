@@ -419,7 +419,7 @@ def currency_columns(df: pd.DataFrame):
 def style_dataframe(df: pd.DataFrame):
     pct_cols = percentage_columns(df)
     money_cols = currency_columns(df)
-    label_cols = {"Keyword", "Campaign", "Country", "Region"}
+    label_cols = {"Keyword", "Campaign", "Country", "Region", "Query", "Page", "Device", "Search appearance"}
     int_cols = [c for c in df.columns if c not in pct_cols and c not in money_cols and c not in label_cols]
 
     format_map = {}
