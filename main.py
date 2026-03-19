@@ -1142,32 +1142,140 @@ with tab2:
 # ------------------------------------------------
 
 with tab3:
-    st.markdown(
-        """
-    <div class="glass-card">
-        <div class="section-title">Google Organic</div>
-        <p style="color: rgba(255,255,255,0.78) !important;">
-            This tab will cover organic website performance coming from Google across engagement and conversion metrics.
-        </p>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
+    if not data_loaded:
+        st.error("Organic data not loaded.")
+    else:
+        st.markdown(
+            """
+        <div class="glass-card">
+            <div class="section-title">Google Organic Performance</div>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
 
-    c1, c2, c3 = st.columns(3)
-    for col, label in [(c1, "Organic Sessions"), (c2, "Engaged Sessions"), (c3, "Conversions")]:
-        with col:
+        # -------- KPI --------
+        total_clicks = queries_df["Clicks"].sum() if 'queries_df' in globals() else 0
+        total_impr = queries_df["Impressions"].sum() if 'queries_df' in globals() else 0
+        avg_ctr = safe_div(total_clicks, total_impr) * 100
+
+        k1, k2, k3 = st.columns(3)
+        for col, label, value in [
+            (k1, "Total Clicks", fmt_number(total_clicks)),
+            (k2, "Total Impressions", fmt_number(total_impr)),
+            (k3, "Avg CTR", fmt_pct(avg_ctr)),
+        ]:
+            with col:
+                st.markdown(
+                    f"""
+                <div class="metric-card">
+                    <div class="metric-label">{label}</div>
+                    <div class="metric-value">{value}</div>
+                </div>
+                """,
+                    unsafe_allow_html=True,
+                )
+
+        # -------- QUERY ANALYSIS --------
+        if 'queries_df' in globals() and not queries_df.empty:
+            q = queries_df.copy()
+            q["CTR %"] = q.apply(lambda r: safe_div(r["Clicks"], r["Impressions"]) * 100, axis=1)
+
+            high_impr_low_ctr = q[
+                (q["Impressions"] > q["Impressions"].median()) &
+                (q["CTR %"] < q["CTR %"].median())
+            ].sort_values("Impressions", ascending=False).head(5)
+
             st.markdown(
                 f"""
-            <div class="metric-card">
-                <div class="metric-label">{label}</div>
-                <div class="metric-value">--</div>
-                <div class="metric-delta">Ready for next build</div>
+            <div class="insight-box">
+                <div class="insight-title">Query Opportunities</div>
+                <div class="insight-text">{bullets_to_html([
+                    f"High impression, low CTR queries: {', '.join(high_impr_low_ctr['Query'].tolist())}" if not high_impr_low_ctr.empty else "No clear query opportunity"
+                ])}</div>
             </div>
             """,
                 unsafe_allow_html=True,
             )
 
+            st.dataframe(style_dataframe(q.sort_values("Clicks", ascending=False).head(20)), use_container_width=True)
+
+        # -------- PAGE ANALYSIS --------
+        if 'pages_df' in globals() and not pages_df.empty:
+            p = pages_df.copy()
+            p["CTR %"] = p.apply(lambda r: safe_div(r["Clicks"], r["Impressions"]) * 100, axis=1)
+
+            st.markdown(
+                f"""
+            <div class="insight-box">
+                <div class="insight-title">Page Performance</div>
+                <div class="insight-text">{bullets_to_html([
+                    "Pages with high impressions but low CTR indicate ranking or messaging issues"
+                ])}</div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+            st.dataframe(style_dataframe(p.sort_values("Clicks", ascending=False).head(20)), use_container_width=True)
+
+        # -------- COUNTRY ANALYSIS --------
+        if 'countries_df' in globals() and not countries_df.empty:
+            c = countries_df.copy()
+            c["CTR %"] = c.apply(lambda r: safe_div(r["Clicks"], r["Impressions"]) * 100, axis=1)
+
+            st.markdown(
+                f"""
+            <div class="insight-box">
+                <div class="insight-title">Geo Insights</div>
+                <div class="insight-text">{bullets_to_html([
+                    "Compare high impression countries vs conversion performance"
+                ])}</div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+            st.dataframe(style_dataframe(c.sort_values("Clicks", ascending=False).head(20)), use_container_width=True)
+
+        # -------- DEVICE ANALYSIS --------
+        if 'devices_df' in globals() and not devices_df.empty:
+            d = devices_df.copy()
+            d["CTR %"] = d.apply(lambda r: safe_div(r["Clicks"], r["Impressions"]) * 100, axis=1)
+
+            st.markdown(
+                f"""
+            <div class="insight-box">
+                <div class="insight-title">Device Insights</div>
+                <div class="insight-text">{bullets_to_html([
+                    "Check CTR differences between desktop and mobile to identify UX gaps"
+                ])}</div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+            st.dataframe(style_dataframe(d), use_container_width=True)
+
+        # -------- FINAL STRATEGIC ANALYSIS --------
+        st.markdown(
+            f"""
+        <div class="glass-card">
+            <div class="section-title">Strategic Organic Analysis & Next Steps</div>
+            <div class="insight-box">
+                <div class="insight-text">{bullets_to_html([
+                    "SEO is currently heavily brand-driven — expand into non-brand queries",
+                    "Improve CTR on high-impression queries via meta optimization",
+                    "Focus on ranking improvements for positions 5–15",
+                    "Align SEO keywords with top-performing paid campaigns",
+                    "Double down on high-performing GEOs",
+                    "Create dedicated landing pages for high-intent keywords"
+                ])}</div>
+            </div>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
 
 # ------------------------------------------------
 # LINKEDIN CAMPAIGNS
@@ -1298,4 +1406,6 @@ with tab4:
                 ["Campaign", "Impr.", "Clicks", "CTR %", "Cost", "Avg. CPC", "Leads", "CPL", "SAL", "Open deal", "Cost per SAL"]
             ].sort_values(["SAL", "Leads", "Open deal", "Cost"], ascending=[False, False, False, False])
 
-            st.dataframe(style_dataframe(li_table), use_container_width=True, height=500)
+            st.dataframe(style_dataframe(li_table), use_container_width=True, height=500)500)
+        else:
+            st.info("No LinkedIn campaign data is available for the selected dates.")
