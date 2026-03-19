@@ -684,13 +684,44 @@ def load_data():
     geo_df = pd.read_csv(Path("data/Google Paid Locations.csv"))
     campaign_raw_df = pd.read_csv(Path("data/Google Paid Campaigns.csv"), header=None)
     linkedin_raw_df = pd.read_csv(Path("data/Linkedin Monthly Performance.csv"), header=None)
-    return keywords_df, geo_df, campaign_raw_df, linkedin_raw_df
+    queries_df = pd.read_csv(Path("data/Queries.csv"))
+    pages_df = pd.read_csv(Path("data/Pages.csv"))
+    countries_df = pd.read_csv(Path("data/Countries.csv"))
+    devices_df = pd.read_csv(Path("data/Devices.csv"))
+    search_appearance_df = pd.read_csv(Path("data/Search appearance.csv"))
+    chart_df = pd.read_csv(Path("data/Chart.csv"))
+    filters_df = pd.read_csv(Path("data/Filters.csv"))
+    return (
+        keywords_df,
+        geo_df,
+        campaign_raw_df,
+        linkedin_raw_df,
+        queries_df,
+        pages_df,
+        countries_df,
+        devices_df,
+        search_appearance_df,
+        chart_df,
+        filters_df,
+    )
 
 
 data_loaded = True
 load_error = None
 try:
-    keywords_df, geo_df, campaign_raw_df, linkedin_raw_df = load_data()
+    (
+        keywords_df,
+        geo_df,
+        campaign_raw_df,
+        linkedin_raw_df,
+        queries_df,
+        pages_df,
+        countries_df,
+        devices_df,
+        search_appearance_df,
+        chart_df,
+        filters_df,
+    ) = load_data()
 except Exception as e:
     data_loaded = False
     load_error = str(e)
@@ -698,6 +729,13 @@ except Exception as e:
     geo_df = pd.DataFrame()
     campaign_raw_df = pd.DataFrame()
     linkedin_raw_df = pd.DataFrame()
+    queries_df = pd.DataFrame()
+    pages_df = pd.DataFrame()
+    countries_df = pd.DataFrame()
+    devices_df = pd.DataFrame()
+    search_appearance_df = pd.DataFrame()
+    chart_df = pd.DataFrame()
+    filters_df = pd.DataFrame()
 
 
 # ------------------------------------------------
@@ -705,6 +743,26 @@ except Exception as e:
 # ------------------------------------------------
 
 if data_loaded:
+    for organic_df, dim_name in [
+        (queries_df, "Query"),
+        (pages_df, "Page"),
+        (countries_df, "Country"),
+        (devices_df, "Device"),
+        (search_appearance_df, "Search appearance"),
+    ]:
+        organic_df.columns = [str(c).strip() for c in organic_df.columns]
+        for required_col in ["Clicks", "Impressions", "CTR", "Position"]:
+            if required_col in organic_df.columns:
+                organic_df[required_col] = clean_numeric(organic_df[required_col])
+        if dim_name in organic_df.columns:
+            organic_df[dim_name] = organic_df[dim_name].astype(str).str.strip()
+
+    if not chart_df.empty:
+        chart_df.columns = [str(c).strip() for c in chart_df.columns]
+        for col in chart_df.columns:
+            if col.lower() != "date":
+                chart_df[col] = clean_numeric(chart_df[col])
+
     keywords_df["Month_dt"] = parse_month(keywords_df["Month"])
     keywords_df["Keyword"] = keywords_df["Keyword"].astype(str).str.strip().str.replace('"', "", regex=False)
     keywords_df["Keyword status"] = keywords_df["Keyword status"].astype(str).str.strip()
@@ -780,6 +838,13 @@ else:
     geo_df = pd.DataFrame()
     campaigns_df = pd.DataFrame()
     linkedin_df = pd.DataFrame()
+    queries_df = pd.DataFrame()
+    pages_df = pd.DataFrame()
+    countries_df = pd.DataFrame()
+    devices_df = pd.DataFrame()
+    search_appearance_df = pd.DataFrame()
+    chart_df = pd.DataFrame()
+    filters_df = pd.DataFrame()
     available_month_labels = []
     month_label_to_value = {}
     q4_2025_labels = []
